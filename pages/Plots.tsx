@@ -22,6 +22,13 @@ import {
   convertKgToUnit,
   formatBatchMassKg
 } from '../src/utils/seedTraceability';
+import {
+  sanitizePlotInputText,
+  canUserEditOrMutatePlot,
+  computeDifferentialSeedStockAdjustment,
+  generateGeodesicPolygonFromSurface,
+  evaluatePlotRelationalHealth
+} from '../src/utils/plotManagementUtils';
 import { DateInputAr } from '../src/components/DateInputAr';
 import { formatDateAr } from '../src/utils/dateFormat';
 
@@ -95,7 +102,8 @@ export default function Plots() {
     plots, locations, varieties, projects, currentUser, usersList, clients,
     seedBatches, deletePlot, updatePlot, 
     addPlot, updateLocation, updateSeedBatch, storagePoints, appName,
-    activeCampaign, setActiveCampaign, closePlotCycle, reopenPlotCycle, tasks
+    activeCampaign, setActiveCampaign, closePlotCycle, reopenPlotCycle, tasks,
+    trialRecords, agrochemicalApplications
   } = useAppContext();
 
   const ROLE_BADGE_LABELS: Record<string, string> = {
@@ -118,6 +126,9 @@ export default function Plots() {
   const setSelectedCampaign = setActiveCampaign;
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editModalTab, setEditModalTab] = useState<'agronomic' | 'traceability' | 'map'>('agronomic');
+  const [formFeedback, setFormFeedback] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
+  const [plotPendingDelete, setPlotPendingDelete] = useState<Plot | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [editingPlot, setEditingPlot] = useState<Plot | null>(null);
   const [selectedPlotForIdModal, setSelectedPlotForIdModal] = useState<Plot | null>(null);
@@ -167,6 +178,7 @@ export default function Plots() {
     const targetClientId = selectedLoc?.clientId || currentUser?.clientId || null;
 
     const filteredUsers = (usersList || []).filter(u => {
+      if (u.accessScope === 'event_attendee') return false;
       if (u.role === 'super_admin' || u.role === 'admin') return true;
       if (!targetClientId) return true;
       if (u.clientId && String(u.clientId) === String(targetClientId)) return true;
@@ -184,19 +196,31 @@ export default function Plots() {
     }));
   }, [usersList, formData.locationId, filterLoc, locations, currentUser]);
 
+  const isSuperAdmin = currentUser?.role === 'super_admin';
+  const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
+  const isClient = currentUser?.role === 'client';
+  const isTechnician = currentUser?.role === 'technician';
+  const canManage = (isAdmin || isClient || isTechnician) && currentUser?.accessScope !== 'event_attendee';
+
   useEffect(() => {
     const locParam = searchParams.get('locationId');
     if (locParam) {
       setFilterLoc(locParam);
     }
     const editId = searchParams.get('editPlotId');
+    const tabParam = searchParams.get('tab');
     if (editId && plots.length > 0) {
       const target = plots.find(p => p.id === editId);
       if (target) {
+        const perm = canUserEditOrMutatePlot(currentUser, target, locations, clients);
+        if (!perm.allowed) return;
         const parentLoc = locations.find(l => l.id === target.locationId);
         setEditingPlot(target);
+        setFormFeedback(null);
+        setEditModalTab(tabParam === 'map' ? 'map' : tabParam === 'traceability' ? 'traceability' : 'agronomic');
         setFormData({
           ...target,
+          projectId: target.projectId || parentLoc?.projectId || projects[0]?.id || '',
           lat: target.coordinates?.lat?.toString() || parentLoc?.coordinates?.lat?.toString() || '',
           lng: target.coordinates?.lng?.toString() || parentLoc?.coordinates?.lng?.toString() || '',
           polygon: target.polygon || [],
@@ -210,18 +234,13 @@ export default function Plots() {
           replicate: target.replicate || 1,
           rowDistance: target.rowDistance || 20,
           density: target.density || 48,
-          perimeter: target.perimeter || 12
+          perimeter: target.perimeter || 12,
+          technicalResponsibleMatricula: target.technicalResponsibleMatricula || 'MP CIAFBA 14.892'
         });
         setIsAddModalOpen(true);
       }
     }
-  }, [searchParams, plots, locations]);
-
-  const isSuperAdmin = currentUser?.role === 'super_admin';
-  const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
-  const isClient = currentUser?.role === 'client';
-  const isTechnician = currentUser?.role === 'technician';
-  const canManage = isAdmin || isClient || isTechnician;
+  }, [searchParams, plots, locations, currentUser, clients, projects]);
 
   const getEstablishmentDefaults = (locId?: string) => {
     const idStr = String(locId || '');
@@ -464,7 +483,8 @@ export default function Plots() {
   // Alternar rápidamente si una Unidad Productiva está activa en la campaña actual
   const handleTogglePlotCampaign = async (plot: Plot, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!canManage) return;
+    const perm = canUserEditOrMutatePlot(currentUser, plot, locations, clients);
+    if (!perm.allowed) return;
 
     const targetCampaign = selectedCampaign === 'all' ? '2025/2026' : selectedCampaign;
     const currentCampaigns = plot.activeCampaigns || (plot.campaign ? [plot.campaign] : ['2025/2026']);
@@ -474,15 +494,12 @@ export default function Plots() {
     let newStatus: any;
 
     if (isCurrentlyActiveInCampaign) {
-      // Pausar en esta campaña
       updatedCampaigns = currentCampaigns.filter(c => c !== targetCampaign);
       newStatus = 'Pausada';
     } else {
-      // Activar en esta campaña
       updatedCampaigns = Array.from(new Set([...currentCampaigns, targetCampaign]));
       newStatus = 'Activa';
 
-      // Si el Campo Padre estaba inactivo en esta campaña, activarlo también
       const parentLoc = locations.find(l => l.id === plot.locationId);
       if (parentLoc) {
         const parentCampaigns = parentLoc.activeCampaigns || ['2024/2025', '2025/2026'];
@@ -506,196 +523,279 @@ export default function Plots() {
 
   const handleSubmitAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.locationId || !formData.varietyId || isSaving) {
-        alert("Campos requeridos: Nombre, Campo y Variedad Genética.");
-        return;
+    if (isSaving) return;
+
+    const perm = canUserEditOrMutatePlot(currentUser, editingPlot, locations, clients, formData.locationId);
+    if (!perm.allowed) {
+      setFormFeedback({
+        type: 'error',
+        message: 'No posee permisos sobre este establecimiento o unidad productiva para realizar modificaciones.'
+      });
+      return;
+    }
+
+    const sanitizedName = sanitizePlotInputText(formData.name, 80).toUpperCase();
+    if (!sanitizedName || !formData.locationId || !formData.varietyId) {
+      setFormFeedback({
+        type: 'error',
+        message: 'Complete los campos obligatorios: Identificador de Parcela, Establecimiento Padre y Variedad Genética.'
+      });
+      return;
+    }
+
+    const stockEval = computeDifferentialSeedStockAdjustment({
+      editingPlot,
+      nextSeedBatchId: formData.seedBatchId,
+      nextUsedKg: calculatedUsedKg,
+      seedBatches
+    });
+
+    if (!stockEval.isValid) {
+      setFormFeedback({
+        type: 'error',
+        message: stockEval.error || 'Stock de semilla insuficiente en el lote seleccionado.'
+      });
+      setEditModalTab('traceability');
+      return;
     }
 
     const selectedBatch = seedBatches.find(b => b.id === formData.seedBatchId);
-    const oldBatch = editingPlot?.seedBatchId ? seedBatches.find(b => b.id === editingPlot.seedBatchId) : undefined;
-    const oldUsageKg = editingPlot ? convertSeedMassToKg(editingPlot.usedSeedValue, editingPlot.usedSeedUnit || 'kg') : 0;
-    const isSameBatch = Boolean(editingPlot && editingPlot.seedBatchId && editingPlot.seedBatchId === formData.seedBatchId);
-
-    // Cálculo diferencial de stock (evita descontar dos veces al editar una parcela ya sembrada)
-    const epsilon = 0.0001;
-    const currentStock = Number(selectedBatch?.remainingQuantity || 0);
-    const usage = Number(calculatedUsedKg);
-    const requiredAdditionalStock = isSameBatch ? (usage - oldUsageKg) : usage;
-
-    if (selectedBatch && requiredAdditionalStock > (currentStock + epsilon)) {
-        const availPool = isSameBatch ? (currentStock + oldUsageKg) : currentStock;
-        alert(`STOCK INSUFICIENTE EN LOTE ${selectedBatch.batchCode}: Disponible ${availPool.toFixed(3)} kg (${Math.round(availPool * 1000)} gr) y se requieren ${usage.toFixed(3)} kg (${Math.round(usage * 1000)} gr).`);
-        return;
-    }
+    const oldBatch = stockEval.oldBatchId ? seedBatches.find(b => b.id === stockEval.oldBatchId) : undefined;
 
     setIsSaving(true);
+    setFormFeedback(null);
     try {
-        const finalLat = parseFloat(formData.lat || '0');
-        const finalLng = parseFloat(formData.lng || '0');
-        const coordinates = (!isNaN(finalLat) && !isNaN(finalLng) && finalLat !== 0) ? { lat: finalLat, lng: finalLng } : null;
+      const parentLoc = locations.find(l => l.id === formData.locationId);
+      const parsedLat = parseFloat(formData.lat || '');
+      const parsedLng = parseFloat(formData.lng || '');
+      const finalLat = !isNaN(parsedLat) && parsedLat !== 0 ? parsedLat : parentLoc?.coordinates?.lat || 0;
+      const finalLng = !isNaN(parsedLng) && parsedLng !== 0 ? parsedLng : parentLoc?.coordinates?.lng || 0;
+      const coordinates = finalLat !== 0 && finalLng !== 0 ? { lat: finalLat, lng: finalLng } : null;
 
-        const { lat, lng, ...cleanFormData } = formData;
-
-        const assignedCampaign = formData.campaign || (selectedCampaign === 'all' ? '2025/2026' : selectedCampaign);
-        const campaignsList = Array.from(new Set([assignedCampaign, ...(formData.activeCampaigns || [])]));
-
-        // Si el campo padre no tenía esta campaña, sincronizarlo
-        const parentLoc = locations.find(l => l.id === formData.locationId);
-        if (parentLoc) {
-          const parentCampaigns = parentLoc.activeCampaigns || ['2024/2025', '2025/2026'];
-          if (!parentCampaigns.includes(assignedCampaign)) {
-            await updateLocation({
-              ...parentLoc,
-              activeCampaigns: [...parentCampaigns, assignedCampaign],
-              status: 'Activo'
-            });
-          }
-        }
-
-        // Vincular automáticamente los IDs de los usuarios del sistema seleccionados como personal interviniente
-        const matchedUserIds = declaredSystemUsers
-          .filter(
-            u =>
-              u.name === cleanFormData.samplingResponsibleName ||
-              u.name === cleanFormData.sowingResponsibleName ||
-              u.name === cleanFormData.technicalResponsibleName ||
-              `Ing. Agr. ${u.name}` === cleanFormData.technicalResponsibleName
-          )
-          .map(u => u.id);
-
-        const combinedResponsibleIds = Array.from(
-          new Set([
-            ...((!isAdmin && currentUser) ? [currentUser.id] : (cleanFormData.responsibleIds || [])),
-            ...matchedUserIds
-          ])
+      let finalPolygon = Array.isArray(formData.polygon) ? formData.polygon : [];
+      let finalPerimeter = Number(formData.perimeter || 12);
+      if (finalPolygon.length < 3 && coordinates) {
+        const autoGeo = generateGeodesicPolygonFromSurface(
+          coordinates.lat,
+          coordinates.lng,
+          Number(formData.surfaceArea || 9),
+          formData.surfaceUnit || 'm2'
         );
+        finalPolygon = autoGeo.polygon;
+        finalPerimeter = autoGeo.perimeterM;
+      }
 
-        const payload: Plot = {
-            ...cleanFormData,
-            id: editingPlot ? editingPlot.id : generateId(),
-            responsibleIds: combinedResponsibleIds,
-            surfaceArea: Number(formData.surfaceArea),
-            density: Number(formData.density),
-            usedSeedValue: Number(formData.usedSeedValue || 0),
-            usedSeedUnit: formData.usedSeedUnit || 'kg',
-            campaign: assignedCampaign,
-            activeCampaigns: campaignsList,
-            coordinates,
-            polygon: formData.polygon || []
-        };
+      const { lat, lng, ...cleanFormData } = formData;
+      const assignedCampaign = formData.campaign || (selectedCampaign === 'all' ? '2025/2026' : selectedCampaign);
+      const campaignsList = Array.from(new Set([assignedCampaign, ...(formData.activeCampaigns || [])]));
 
-        let success = false;
-        if (editingPlot) {
-          success = await updatePlot(payload);
-        } else {
-          success = await addPlot(payload);
+      if (parentLoc) {
+        const parentCampaigns = parentLoc.activeCampaigns || ['2024/2025', '2025/2026'];
+        if (!parentCampaigns.includes(assignedCampaign)) {
+          await updateLocation({
+            ...parentLoc,
+            activeCampaigns: [...parentCampaigns, assignedCampaign],
+            status: 'Activo'
+          });
         }
-        
-        if (success) {
-            if (isSameBatch && selectedBatch) {
-                const deltaKg = usage - oldUsageKg;
-                if (Math.abs(deltaKg) > 0.00001) {
-                    const newRemaining = Math.max(0, Math.round((currentStock - deltaKg) * 1000) / 1000);
-                    await updateSeedBatch({
-                        ...selectedBatch,
-                        remainingQuantity: newRemaining
-                    });
-                }
-            } else {
-                // Si cambió de lote en edición, restituir los kg usados al lote anterior
-                if (oldBatch && oldUsageKg > 0) {
-                    const restoredRemaining = Math.round((Number(oldBatch.remainingQuantity || 0) + oldUsageKg) * 1000) / 1000;
-                    await updateSeedBatch({
-                        ...oldBatch,
-                        remainingQuantity: restoredRemaining
-                    });
-                }
-                if (selectedBatch && usage > 0) {
-                    const newRemaining = Math.max(0, Math.round((currentStock - usage) * 1000) / 1000);
-                    await updateSeedBatch({
-                        ...selectedBatch,
-                        remainingQuantity: newRemaining
-                    });
-                }
-            }
+      }
 
-            setIsAddModalOpen(false);
-            resetForm();
+      const matchedUserIds = declaredSystemUsers
+        .filter(
+          u =>
+            u.name === cleanFormData.samplingResponsibleName ||
+            u.name === cleanFormData.sowingResponsibleName ||
+            u.name === cleanFormData.technicalResponsibleName ||
+            `Ing. Agr. ${u.name}` === cleanFormData.technicalResponsibleName
+        )
+        .map(u => u.id);
+
+      const combinedResponsibleIds = Array.from(
+        new Set([
+          ...((!isAdmin && currentUser) ? [currentUser.id] : (cleanFormData.responsibleIds || [])),
+          ...matchedUserIds
+        ])
+      );
+
+      const payload: Plot = {
+        ...cleanFormData,
+        id: editingPlot ? editingPlot.id : generateId(),
+        name: sanitizedName,
+        projectId: cleanFormData.projectId || parentLoc?.projectId || projects[0]?.id || '',
+        block: sanitizePlotInputText(cleanFormData.block || 'Bloque 1', 60),
+        soilType: sanitizePlotInputText(cleanFormData.soilType || parentLoc?.soilType || 'Franco', 80),
+        irrigationType: sanitizePlotInputText(cleanFormData.irrigationType || parentLoc?.irrigationSystem || 'Goteo', 80),
+        ownerName: sanitizePlotInputText(cleanFormData.ownerName || parentLoc?.ownerName || parentLoc?.responsiblePerson || 'Red Nucleus', 100),
+        observations: sanitizePlotInputText(cleanFormData.observations || '', 500),
+        technicalResponsibleMatricula: sanitizePlotInputText(cleanFormData.technicalResponsibleMatricula || 'MP CIAFBA 14.892', 60),
+        responsibleIds: combinedResponsibleIds,
+        surfaceArea: Math.max(0.01, Number(formData.surfaceArea || 9)),
+        density: Math.max(1, Number(formData.density || 48)),
+        rowDistance: Math.max(1, Number(formData.rowDistance || 20)),
+        replicate: Math.max(1, Number(formData.replicate || 1)),
+        perimeter: finalPerimeter,
+        usedSeedValue: Math.max(0, Number(formData.usedSeedValue || 0)),
+        usedSeedUnit: formData.usedSeedUnit || 'kg',
+        campaign: assignedCampaign,
+        activeCampaigns: campaignsList,
+        coordinates,
+        polygon: finalPolygon
+      };
+
+      let success = false;
+      if (editingPlot) {
+        success = await updatePlot(payload);
+      } else {
+        success = await addPlot(payload);
+      }
+
+      if (success) {
+        if (oldBatch && typeof stockEval.restoredOldBatchRemainingKg === 'number') {
+          await updateSeedBatch({
+            ...oldBatch,
+            remainingQuantity: stockEval.restoredOldBatchRemainingKg
+          });
         }
+        if (
+          selectedBatch &&
+          typeof stockEval.newSelectedBatchRemainingKg === 'number' &&
+          Math.abs(stockEval.deltaSelectedBatchKg) > 0.00001
+        ) {
+          await updateSeedBatch({
+            ...selectedBatch,
+            remainingQuantity: stockEval.newSelectedBatchRemainingKg
+          });
+        }
+
+        setIsAddModalOpen(false);
+        resetForm();
+      }
     } finally {
-        setIsSaving(false);
+      setIsSaving(false);
     }
   };
 
   const handleKMLUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-          const text = event.target?.result as string;
-          const poly = parseKML(text);
-          if (poly && poly.length > 2) {
-              const lats = poly.map(p => p.lat);
-              const lngs = poly.map(p => p.lng);
-              const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
-              const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-              const areaM2 = calculateGeodesicArea(poly);
-              let areaVal = areaM2;
-              let unit = 'm2';
-              if (areaM2 > 9000) {
-                  areaVal = areaM2 / 10000;
-                  unit = 'ha';
-              }
-              setFormData((prev: any) => ({ ...prev, polygon: poly, surfaceArea: Number(areaVal.toFixed(2)), surfaceUnit: unit, lat: centerLat.toFixed(6), lng: centerLng.toFixed(6) }));
-          } else {
-              alert("No se pudo extraer un polígono válido del KML.");
-          }
-          if (fileInputRef.current) fileInputRef.current.value = '';
-      };
-      reader.readAsText(file);
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = event => {
+      const text = event.target?.result as string;
+      const poly = parseKML(text);
+      if (poly && poly.length > 2) {
+        const lats = poly.map(p => p.lat);
+        const lngs = poly.map(p => p.lng);
+        const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+        const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+        const areaM2 = calculateGeodesicArea(poly);
+        let areaVal = areaM2;
+        let unit = 'm2';
+        if (areaM2 > 9000) {
+          areaVal = areaM2 / 10000;
+          unit = 'ha';
+        }
+        setFormData((prev: any) => ({
+          ...prev,
+          polygon: poly,
+          surfaceArea: Number(areaVal.toFixed(2)),
+          surfaceUnit: unit,
+          lat: centerLat.toFixed(6),
+          lng: centerLng.toFixed(6)
+        }));
+        setFormFeedback({
+          type: 'success',
+          message: `Polígono KML importado con éxito (${poly.length} vértices WGS84 · ${areaVal.toFixed(2)} ${unit}).`
+        });
+      } else {
+        setFormFeedback({
+          type: 'error',
+          message: 'No se pudo extraer un polígono válido de 3 o más vértices desde el archivo KML.'
+        });
+      }
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsText(file);
   };
 
   const handlePolygonChange = (newPoly: { lat: number, lng: number }[], areaHa: number, center: { lat: number, lng: number }) => {
-      const areaM2 = areaHa * 10000;
-      const isMicroPlot = areaM2 > 0 && areaM2 < 2500;
-      // Calcular perímetro real Haversine en metros
-      const R = 6378137;
-      const toRad = (x: number) => (x * Math.PI) / 180;
-      let perim = 0;
-      if (newPoly.length >= 2) {
-        for (let i = 0; i < newPoly.length; i++) {
-          const p1 = newPoly[i];
-          const p2 = newPoly[(i + 1) % newPoly.length];
-          const dLat = toRad(p2.lat - p1.lat);
-          const dLng = toRad(p2.lng - p1.lng);
-          const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(p1.lat)) * Math.cos(toRad(p2.lat)) * Math.sin(dLng / 2) ** 2;
-          perim += 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        }
+    const areaM2 = areaHa * 10000;
+    const isMicroPlot = areaM2 > 0 && areaM2 < 2500;
+    const R = 6378137;
+    const toRad = (x: number) => (x * Math.PI) / 180;
+    let perim = 0;
+    if (newPoly.length >= 2) {
+      for (let i = 0; i < newPoly.length; i++) {
+        const p1 = newPoly[i];
+        const p2 = newPoly[(i + 1) % newPoly.length];
+        const dLat = toRad(p2.lat - p1.lat);
+        const dLng = toRad(p2.lng - p1.lng);
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(p1.lat)) * Math.cos(toRad(p2.lat)) * Math.sin(dLng / 2) ** 2;
+        perim += 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       }
-      setFormData((prev: any) => ({ 
-          ...prev, 
-          polygon: newPoly, 
-          surfaceArea: areaHa > 0 ? Number((isMicroPlot ? areaM2 : areaHa).toFixed(2)) : prev.surfaceArea, 
-          surfaceUnit: areaHa > 0 ? (isMicroPlot ? 'm2' : 'ha') : prev.surfaceUnit,
-          perimeter: perim > 0 ? Number(perim.toFixed(1)) : prev.perimeter,
-          lat: center.lat.toFixed(6), 
-          lng: center.lng.toFixed(6) 
-      }));
+    }
+    setFormData((prev: any) => ({ 
+      ...prev, 
+      polygon: newPoly, 
+      surfaceArea: areaHa > 0 ? Number((isMicroPlot ? areaM2 : areaHa).toFixed(2)) : prev.surfaceArea, 
+      surfaceUnit: areaHa > 0 ? (isMicroPlot ? 'm2' : 'ha') : prev.surfaceUnit,
+      perimeter: perim > 0 ? Number(perim.toFixed(1)) : prev.perimeter,
+      lat: center.lat.toFixed(6), 
+      lng: center.lng.toFixed(6) 
+    }));
+  };
+
+  const handleGeneratePolygonFromSurface = () => {
+    const parentLoc = locations.find(l => l.id === formData.locationId);
+    const baseLat = parseFloat(formData.lat || '') || parentLoc?.coordinates?.lat || -43.308576;
+    const baseLng = parseFloat(formData.lng || '') || parentLoc?.coordinates?.lng || -65.289047;
+    const generated = generateGeodesicPolygonFromSurface(
+      baseLat,
+      baseLng,
+      Number(formData.surfaceArea || 9),
+      formData.surfaceUnit || 'm2'
+    );
+    setFormData((prev: any) => ({
+      ...prev,
+      lat: baseLat.toFixed(6),
+      lng: baseLng.toFixed(6),
+      polygon: generated.polygon,
+      perimeter: generated.perimeterM
+    }));
+    setFormFeedback({
+      type: 'success',
+      message: `Polígono geodésico generado automáticamente (${generated.polygon.length} vértices · ${formData.surfaceArea} ${formData.surfaceUnit} · Perímetro ${generated.perimeterM} m).`
+    });
   };
 
   const handleDeletePlot = (e: React.MouseEvent, id: string) => {
-      e.stopPropagation();
-      if (window.confirm("¿Está seguro de eliminar esta unidad productiva?")) {
-          deletePlot(id);
-      }
+    e.stopPropagation();
+    if (!isAdmin) return;
+    const target = plots.find(p => p.id === id);
+    if (!target) return;
+    setPlotPendingDelete(target);
   };
 
-  const handleEditPlot = (plot: Plot, e: React.MouseEvent) => {
+  const confirmDeletePlot = async () => {
+    if (!plotPendingDelete || !isAdmin) return;
+    await deletePlot(plotPendingDelete.id);
+    setPlotPendingDelete(null);
+  };
+
+  const handleEditPlot = (
+    plot: Plot,
+    e: React.MouseEvent,
+    initialTab: 'agronomic' | 'traceability' | 'map' = 'agronomic'
+  ) => {
     e.stopPropagation();
+    const perm = canUserEditOrMutatePlot(currentUser, plot, locations, clients);
+    if (!perm.allowed) return;
     const parentLoc = locations.find(l => l.id === plot.locationId);
     setEditingPlot(plot);
+    setFormFeedback(null);
+    setEditModalTab(initialTab);
     setFormData({
       ...plot,
+      projectId: plot.projectId || parentLoc?.projectId || projects[0]?.id || '',
       lat: plot.coordinates?.lat?.toString() || parentLoc?.coordinates?.lat?.toString() || '',
       lng: plot.coordinates?.lng?.toString() || parentLoc?.coordinates?.lng?.toString() || '',
       polygon: plot.polygon || [],
@@ -709,7 +809,8 @@ export default function Plots() {
       replicate: plot.replicate || 1,
       rowDistance: plot.rowDistance || 20,
       density: plot.density || 48,
-      perimeter: plot.perimeter || 12
+      perimeter: plot.perimeter || 12,
+      technicalResponsibleMatricula: plot.technicalResponsibleMatricula || 'MP CIAFBA 14.892'
     });
     setIsAddModalOpen(true);
   };
@@ -724,19 +825,12 @@ export default function Plots() {
       <div className="bg-white dark:bg-slate-900/90 rounded-2xl md:rounded-3xl p-6 md:p-8 border border-slate-200/80 dark:border-slate-800 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Unidades en Producción
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60">
-                <Calendar size={11} className="text-sky-500" />
-                Campaña: {selectedCampaign}
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60">
-                <ShieldCheck size={11} className="text-purple-500" />
-                {campaignStats.activeCount} Lotes Activos
-              </span>
+            <div className="flex flex-wrap items-center gap-2 mb-3 text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
+              <span className="text-emerald-700 dark:text-emerald-400 uppercase">Unidades en Producción</span>
+              <span aria-hidden="true">·</span>
+              <span>Campaña {selectedCampaign}</span>
+              <span aria-hidden="true">·</span>
+              <span>{campaignStats.activeCount} Lotes Activos</span>
             </div>
 
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 dark:text-slate-50 tracking-tight flex items-baseline gap-3">
@@ -1222,13 +1316,22 @@ export default function Plots() {
                           </button>
 
                           {canManage && (
-                            <button
-                              onClick={e => handleEditPlot(p, e)}
-                              className="p-1.5 text-slate-500 hover:text-emerald-600 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 rounded-lg transition cursor-pointer"
-                              title="Editar Unidad Productiva"
-                            >
-                              <Edit2 size={13} />
-                            </button>
+                            <>
+                              <button
+                                onClick={e => handleEditPlot(p, e, 'map')}
+                                className="p-1.5 text-sky-600 hover:text-sky-500 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/50 dark:text-sky-300 rounded-lg transition cursor-pointer"
+                                title="Editar Mapa Satelital Horizontal y Polígono GPS"
+                              >
+                                <Globe size={13} />
+                              </button>
+                              <button
+                                onClick={e => handleEditPlot(p, e, 'agronomic')}
+                                className="p-1.5 text-slate-500 hover:text-emerald-600 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 rounded-lg transition cursor-pointer"
+                                title="Editar Unidad Productiva"
+                              >
+                                <Edit2 size={13} />
+                              </button>
+                            </>
                           )}
 
                           {canManage && (
@@ -1359,9 +1462,21 @@ export default function Plots() {
                             {loc?.name || 'S/D'} ({loc?.city || loc?.province})
                           </Link>
                         </span>
-                        <span className="text-[10px] text-slate-400 shrink-0 tabular-nums">
-                          {p.polygon?.length || 4} vértices GPS
-                        </span>
+                        {canManage ? (
+                          <button
+                            type="button"
+                            onClick={e => handleEditPlot(p, e, 'map')}
+                            className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline shrink-0 tabular-nums cursor-pointer flex items-center gap-1"
+                            title="Abrir directamente el Mapa Satelital Horizontal y Polígono GPS de esta parcela"
+                          >
+                            <Globe size={11} />
+                            <span>{p.polygon?.length || 4} vértices GPS</span>
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 shrink-0 tabular-nums">
+                            {p.polygon?.length || 4} vértices GPS
+                          </span>
+                        )}
                       </div>
 
                       {/* 2. Barra de Evolución Fenológica y Fotoperiodo Local */}
@@ -1466,7 +1581,7 @@ export default function Plots() {
                       </div>
                     </div>
 
-                    {/* 5. Acciones Inferiores (Sin botón redundante de Cierre) */}
+                    {/* 5. Acciones Inferiores */}
                     <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1.5">
                       <Link
                         to={`/plots/${p.id}`}
@@ -1497,13 +1612,23 @@ export default function Plots() {
                       </button>
 
                       {canManage && (
-                        <button
-                          onClick={e => handleEditPlot(p, e)}
-                          className="p-2 text-slate-600 dark:text-slate-300 hover:text-emerald-600 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 rounded-xl transition border border-slate-200 dark:border-slate-700 cursor-pointer"
-                          title="Editar Parcela"
-                        >
-                          <Edit2 size={14} />
-                        </button>
+                        <>
+                          <button
+                            onClick={e => handleEditPlot(p, e, 'map')}
+                            className="p-2 text-sky-700 dark:text-sky-300 hover:text-sky-600 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/50 rounded-xl transition border border-sky-200 dark:border-sky-800/60 cursor-pointer"
+                            title="Editar Mapa Satelital Horizontal y Polígono GPS"
+                          >
+                            <Globe size={14} />
+                          </button>
+
+                          <button
+                            onClick={e => handleEditPlot(p, e, 'agronomic')}
+                            className="p-2 text-slate-600 dark:text-slate-300 hover:text-emerald-600 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 rounded-xl transition border border-slate-200 dark:border-slate-700 cursor-pointer"
+                            title="Editar Datos de la Parcela"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                        </>
                       )}
 
                       {isAdmin && (
@@ -1524,778 +1649,1075 @@ export default function Plots() {
         </div>
       )}
 
-      {/* 4. MODAL DE ALTA / EDICIÓN DE UNIDAD PRODUCTIVA */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center z-[60] p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl md:rounded-3xl max-w-6xl w-full p-6 md:p-8 shadow-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 border border-slate-200 dark:border-slate-800">
-            <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl border border-emerald-500/20">
-                  <Sprout size={24} />
-                </div>
-                <div>
-                  <h2 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                    {editingPlot ? 'Editar Unidad Productiva' : 'Nueva Unidad Productiva / Parcela'}
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                    Protocolo agronómico, trazabilidad de siembra y asignación de campaña.
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={() => !isSaving && setIsAddModalOpen(false)} 
-                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition text-slate-400"
-              >
-                <X size={20} />
-              </button>
-            </div>
+      {/* 4. MODAL REDISEÑADO DE ALTA / EDICIÓN DE UNIDAD PRODUCTIVA (SIN SCROLL EXCESIVO · MAPA HORIZONTAL WIDESCREEN 16:9) */}
+      {isAddModalOpen && (() => {
+        const relHealth = evaluatePlotRelationalHealth(
+          {
+            ...formData,
+            id: editingPlot?.id,
+            coordinates:
+              formData.lat && formData.lng && !isNaN(parseFloat(formData.lat))
+                ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) }
+                : undefined
+          },
+          {
+            locations,
+            varieties,
+            seedBatches,
+            projects,
+            clients,
+            tasks,
+            trialRecords,
+            agroApps: agrochemicalApplications
+          }
+        );
 
-            <form onSubmit={handleSubmitAdd} className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* COLUMNA 1: ATRIBUCIÓN TERRITORIAL Y CAMPAÑA */}
-                <div className="space-y-5">
-                  <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 space-y-3">
-                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                      <MapPin size={14} className="text-emerald-500" />
-                      <span>Atribución Territorial & Campaña</span>
-                    </h3>
+        const stockPreview = computeDifferentialSeedStockAdjustment({
+          editingPlot,
+          nextSeedBatchId: formData.seedBatchId,
+          nextUsedKg: calculatedUsedKg,
+          seedBatches
+        });
 
-                    <div>
-                      <label className={labelClass}>Identificador Parcela / Lote *</label>
-                      <input 
-                        required 
-                        placeholder="Ej: LOTE-01 / SECTOR-A / SALA-INDOOR-1" 
-                        className={inputClass} 
-                        value={formData.name} 
-                        onChange={e => setFormData({ ...formData, name: e.target.value.toUpperCase() })} 
-                      />
+        const loadSummary = formatPlotSeedLoad(formData.usedSeedValue, formData.usedSeedUnit);
+        const eqKgHa = relHealth.areaHa > 0 ? loadSummary.kg / relHealth.areaHa : 0;
+
+        return (
+          <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-md flex items-center justify-center z-[60] p-3 sm:p-5">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl md:rounded-3xl max-w-6xl w-full shadow-2xl max-h-[94vh] flex flex-col overflow-hidden border border-slate-200 dark:border-slate-800">
+              
+              {/* CABECERA FIJA COMPACTA + BARRA DE ESTADO RELACIONAL EN VIVO */}
+              <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/90 shrink-0 space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm shrink-0"
+                      style={{ backgroundColor: formData.color || '#10b981' }}
+                    >
+                      <Sprout size={20} />
                     </div>
-
-                    <div>
-                      <label className={labelClass}>Campo / Sitio Padre * (Hereda Suelo, Riego y Geodesia)</label>
-                      <select 
-                        required 
-                        className={inputClass} 
-                        value={formData.locationId} 
-                        onChange={e => {
-                          const chosenLocId = e.target.value;
-                          const chosenLoc = locations.find(l => l.id === chosenLocId);
-                          const updates: any = {
-                            locationId: chosenLocId,
-                            soilType: chosenLoc?.soilType || 'Franco',
-                            irrigationType: chosenLoc?.irrigationSystem || 'Goteo',
-                            ownerName: chosenLoc?.ownerName || chosenLoc?.responsiblePerson || 'Red Nucleus'
-                          };
-                          if (chosenLoc?.coordinates?.lat && chosenLoc?.coordinates?.lng) {
-                            if (!formData.polygon || formData.polygon.length === 0) {
-                              updates.lat = chosenLoc.coordinates.lat.toString();
-                              updates.lng = chosenLoc.coordinates.lng.toString();
-                            }
-                          }
-                          setFormData((prev: any) => ({ ...prev, ...updates }));
-                        }}
-                      >
-                        <option value="">Seleccionar campo...</option>
-                        {availableLocations.map(l => (
-                          <option key={l.id} value={l.id}>
-                            {l.name} ({l.siteType || 'Campo'} · {l.city || l.province})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* SELECTOR DE CAMPAÑA AGRÍCOLA (REQUERIMIENTO CLAVE) */}
-                    <div>
-                      <label className={labelClass}>Campaña Agrícola Asignada *</label>
-                      <select 
-                        required 
-                        className={inputClass} 
-                        value={formData.campaign} 
-                        onChange={e => setFormData({ ...formData, campaign: e.target.value })}
-                      >
-                        {CAMPAIGNS.map(c => (
-                          <option key={c} value={c}>
-                            Campaña {c} {c === '2025/2026' ? '(Actual)' : c === '2026/2027' ? '(Próxima)' : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <div>
-                        <label className={labelClass}>Tipo de Unidad</label>
-                        <select 
-                          className={inputClass} 
-                          value={formData.type} 
-                          onChange={e => setFormData({ ...formData, type: e.target.value })}
-                        >
-                          <option value="Ensayo">Ensayo / Microparcela</option>
-                          <option value="Producción">Lote Comercial</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className={labelClass}>Estado Operativo</label>
-                        <select 
-                          className={inputClass} 
-                          value={formData.status} 
-                          onChange={e => setFormData({ ...formData, status: e.target.value })}
-                        >
-                          <option value="Activa">Activa en Producción</option>
-                          <option value="Pausada">Pausada en Campaña</option>
-                          <option value="En Barbecho">En Barbecho</option>
-                          <option value="Cosechada">Cosechada</option>
-                          <option value="Cancelada">Cancelada</option>
-                        </select>
+                    <div className="min-w-0">
+                      <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight truncate">
+                        {editingPlot ? `Editar Unidad Productiva: ${formData.name || editingPlot.name}` : 'Nueva Unidad Productiva / Parcela'}
+                      </h2>
+                      <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                        <span>{relHealth.parentLocation?.name || 'Seleccione Campo Padre'}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{relHealth.variety?.name || 'Seleccione Variedad'}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{formData.surfaceArea || 9} {formData.surfaceUnit || 'm2'} ({relHealth.estimatedPlantsCount.toLocaleString('es-AR')} pl. est.)</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{formData.polygon?.length || 0} vértices GPS</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* PANEL DE ATRIBUTOS HEREDADOS DEL SITIO PADRE & DISEÑO DBCA */}
-                  <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-2xl border border-emerald-200/70 dark:border-emerald-900/40 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-[11px] font-mono font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                        <Layers size={13} className="text-emerald-600" />
-                        <span>Herencia del Sitio & Diseño DBCA</span>
-                      </h3>
-                      {formData.locationId && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const parentLoc = locations.find(l => l.id === formData.locationId);
-                            if (parentLoc) {
-                              setFormData((prev: any) => ({
-                                ...prev,
-                                soilType: parentLoc.soilType || 'Franco',
-                                irrigationType: parentLoc.irrigationSystem || 'Goteo',
-                                ownerName: parentLoc.ownerName || parentLoc.responsiblePerson || 'Red Nucleus'
-                              }));
-                            }
-                          }}
-                          className="text-[9.5px] font-mono font-bold text-emerald-700 dark:text-emerald-300 bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 cursor-pointer"
-                        >
-                          ↻ Re-sincronizar del Campo
-                        </button>
-                      )}
-                    </div>
+                  <button
+                    type="button"
+                    onClick={() => !isSaving && setIsAddModalOpen(false)}
+                    className="p-2 hover:bg-slate-200/70 dark:hover:bg-slate-800 rounded-xl transition text-slate-500 shrink-0 cursor-pointer"
+                    title="Cerrar"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
 
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <div>
-                        <label className={labelClass}>Suelo (Heredado)</label>
-                        <input
-                          className={inputClass}
-                          placeholder="Ej: Franco Arenoso"
-                          value={formData.soilType || ''}
-                          onChange={e => setFormData({ ...formData, soilType: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Sistema Riego (Heredado)</label>
-                        <input
-                          className={inputClass}
-                          placeholder="Ej: Goteo Automatizado"
-                          value={formData.irrigationType || ''}
-                          onChange={e => setFormData({ ...formData, irrigationType: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Bloque Experimental</label>
-                        <input
-                          className={inputClass}
-                          placeholder="Ej: Bloque 1"
-                          value={formData.block || ''}
-                          onChange={e => setFormData({ ...formData, block: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Repetición DBCA</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="20"
-                          className={inputClass}
-                          value={formData.replicate || 1}
-                          onChange={e => setFormData({ ...formData, replicate: Number(e.target.value) })}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Densidad Obj. (pl/m²)</label>
-                        <input
-                          type="number"
-                          step="1"
-                          className={inputClass}
-                          value={formData.density || 48}
-                          onChange={e => setFormData({ ...formData, density: Number(e.target.value) })}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Dist. Hileras (cm)</label>
-                        <input
-                          type="number"
-                          step="1"
-                          className={inputClass}
-                          value={formData.rowDistance || 20}
-                          onChange={e => setFormData({ ...formData, rowDistance: Number(e.target.value) })}
-                        />
-                      </div>
-                    </div>
+                {/* BARRA DE PESTAÑAS HORIZONTALES (3 VISTAS ORDENADAS SIN DESORDEN VISUAL NI SCROLL VERTICAL) */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <div className="flex flex-wrap items-center gap-1.5 bg-slate-200/70 dark:bg-slate-800 p-1 rounded-xl w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => setEditModalTab('agronomic')}
+                      className={`flex-1 sm:flex-initial px-3.5 py-2 rounded-lg text-xs font-mono font-bold transition flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap ${
+                        editModalTab === 'agronomic'
+                          ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <MapPin size={14} />
+                      <span>1. Datos, Campo & Diseño DBCA</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEditModalTab('traceability')}
+                      className={`flex-1 sm:flex-initial px-3.5 py-2 rounded-lg text-xs font-mono font-bold transition flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap ${
+                        editModalTab === 'traceability'
+                          ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <FlaskConical size={14} />
+                      <span>2. Semilla INASE & Responsables</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEditModalTab('map')}
+                      className={`flex-1 sm:flex-initial px-3.5 py-2 rounded-lg text-xs font-mono font-bold transition flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap ${
+                        editModalTab === 'map'
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <Globe size={14} />
+                      <span>3. Mapa Satelital Horizontal & GPS ({formData.polygon?.length || 0} vért.)</span>
+                    </button>
                   </div>
 
-                  <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 space-y-3">
-                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                      <Palette size={14} className="text-emerald-500" />
-                      <span>Color de Identificación</span>
-                    </h3>
+                  {/* Resumen Relacional Rápido */}
+                  <div className="hidden xl:flex items-center gap-3 text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400">
+                    <span>Socio: <strong className="text-slate-800 dark:text-slate-200">{relHealth.parentClient?.name || relHealth.parentLocation?.ownerName || 'Red Nucleus'}</strong></span>
+                    <span aria-hidden="true">·</span>
+                    <span>Labores: <strong className="text-indigo-600 dark:text-indigo-400">{relHealth.linkedTasksCount}</strong></span>
+                    <span aria-hidden="true">·</span>
+                    <span>Mediciones: <strong className="text-emerald-600 dark:text-emerald-400">{relHealth.linkedRecordsCount}</strong></span>
+                  </div>
+                </div>
+
+                {/* Banner de Validación / Feedback Inline (Reemplaza window.alert) */}
+                {formFeedback && (
+                  <div
+                    className={`px-3.5 py-2 rounded-xl border text-xs font-mono flex items-center justify-between gap-2 ${
+                      formFeedback.type === 'error'
+                        ? 'bg-rose-50 dark:bg-rose-950/50 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200'
+                        : 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200'
+                    }`}
+                  >
                     <div className="flex items-center gap-2">
-                      {COLOR_PALETTE.map((swatch) => (
-                        <button 
-                          key={swatch.color} 
-                          type="button" 
-                          title={swatch.label} 
-                          onClick={() => setFormData({ ...formData, color: swatch.color })} 
-                          className={`w-7 h-7 rounded-full border-2 transition-transform ${
-                            formData.color === swatch.color ? 'scale-110 border-slate-900 dark:border-white shadow-md' : 'border-transparent hover:scale-105'
-                          }`} 
-                          style={{ backgroundColor: swatch.color }} 
-                        />
-                      ))}
+                      {formFeedback.type === 'error' ? <AlertCircle size={15} className="shrink-0" /> : <CheckCircle2 size={15} className="shrink-0" />}
+                      <span>{formFeedback.message}</span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormFeedback(null)}
+                      className="text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
                   </div>
-                </div>
+                )}
+              </div>
 
-                {/* COLUMNA 2: GENÉTICA Y PROTOCOLO DE SIEMBRA */}
-                <div className="space-y-5">
-                  <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/40 space-y-3">
-                    <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                      <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
-                        <FlaskConical size={14} />
-                        <span>Lote de Semilla en Stock Activo (Calidad Aprobada) & Carga</span>
-                      </h3>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setIsSeedScannerOpen(true)}
-                          className="text-[10px] font-mono font-bold text-white bg-emerald-600 hover:bg-emerald-500 px-2.5 py-1 rounded-md shadow-sm flex items-center gap-1 cursor-pointer transition"
-                          title="Escanear Rótulo INASE / Código QR o Barras del Lote de Semilla"
-                        >
-                          <ScanLine size={11} />
-                          <span>Escanear Lote QR</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setIsProtocolModalOpen(true)}
-                          className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-300 hover:underline flex items-center gap-1 bg-white/80 dark:bg-slate-900/80 px-2 py-1 rounded-md border border-emerald-300 dark:border-emerald-800 cursor-pointer"
-                          title="Ver pautas técnicas y dosis de 50 kg/Ha"
-                        >
-                          <FileText size={11} />
-                          <span>Anexo II</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <p className="text-[10px] font-mono text-emerald-800 dark:text-emerald-200 bg-white/80 dark:bg-slate-900/70 px-2.5 py-1.5 rounded-xl border border-emerald-200/80 dark:border-emerald-800/60">
-                      ✅ <strong>Trazabilidad de Calidad:</strong> Seleccione directamente el lote disponible de semillas que aprobó la <strong>Inspección Técnica (Dictamen Emitido = ACTIVO en Stock)</strong>. Al elegir el lote se asigna automáticamente su Genética.
-                    </p>
-
-                    <div>
-                      <label className="text-[10px] font-mono font-black uppercase mb-1 block text-emerald-800 dark:text-emerald-300 tracking-wider">
-                        1. Lote Disponible en Stock Activo (Pasó Inspección Técnica de Calidad) *
-                      </label>
-                      <select 
-                        className="w-full border-2 border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-2.5 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-bold text-xs" 
-                        value={formData.seedBatchId} 
-                        onChange={e => {
-                          const chosenId = e.target.value;
-                          const chosenB = seedBatches.find(b => b.id === chosenId);
-                          setFormData({
-                            ...formData,
-                            seedBatchId: chosenId,
-                            varietyId: chosenB?.varietyId || formData.varietyId
-                          });
-                        }}
-                      >
-                        <option value="">Seleccione lote activo aprobado por Calidad ({availableBatches.length} disp.)...</option>
-                        {availableBatches
-                          .slice()
-                          .sort((a, b) => {
-                            const aMatch = formData.varietyId && a.varietyId === formData.varietyId ? 0 : 1;
-                            const bMatch = formData.varietyId && b.varietyId === formData.varietyId ? 0 : 1;
-                            return aMatch - bMatch;
-                          })
-                          .map(b => {
-                            const vName = varieties.find(v => v.id === b.varietyId)?.name || 'Genética Homologada';
-                            const spName = storagePoints.find(s => s.id === b.storagePointId)?.name || 'Almacén';
-                            const breederPg = b.breederGerminationPct ?? b.germination ?? 90;
-                            const coopPg = b.coopGerminationPct ?? b.germination ?? 90;
-                            return (
-                              <option key={b.id} value={b.id}>
-                                ● [STOCK ACTIVO · QA COOP OK] {b.batchCode} · Genética: {vName} · Stock: {Number(b.remainingQuantity || 0).toFixed(3)} kg ({Math.round(Number(b.remainingQuantity || 0) * 1000)} gr) · 1° PG Obt: {breederPg}% / 2° PG Coop: {coopPg}% ({spName})
-                              </option>
-                            );
-                          })}
-                      </select>
-                      {(() => {
-                        const selB = seedBatches.find(b => b.id === formData.seedBatchId);
-                        if (!selB) return null;
-                        const batchInfo = formatBatchMassKg(selB.remainingQuantity);
-                        const selVar = varieties.find(v => v.id === selB.varietyId);
-                        const breederPg = selB.breederGerminationPct ?? selB.germination ?? 90;
-                        const coopPg = selB.coopGerminationPct ?? selB.germination ?? 90;
-                        return (
-                          <div className="mt-1.5 p-2.5 rounded-xl bg-white/95 dark:bg-slate-900/95 border border-emerald-300 dark:border-emerald-800 text-[10px] font-mono space-y-1.5 shadow-sm">
-                            <div className="flex items-center justify-between flex-wrap gap-1">
-                              <span className="px-2 py-0.5 rounded bg-emerald-600 text-white font-black uppercase text-[9px] flex items-center gap-1">
-                                <ShieldCheck size={11} />
-                                <span>STOCK ACTIVO · 2° PG COOPERATIVA (QA) APROBADO</span>
-                              </span>
-                              <span className="text-purple-700 dark:text-purple-300 font-black uppercase text-[9px]">
-                                1° PG Obtentor: {breederPg}% ➔ 2° PG Coop QA: {coopPg}% · Pureza {selB.purity || 99}%
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 flex-wrap gap-1">
-                              <span>
-                                Lote: <strong>{selB.batchCode}</strong> · Genética (Acta): <strong className="text-emerald-700 dark:text-emerald-400">{selVar?.name || 'Homologada'}</strong>
-                              </span>
-                              <span>
-                                Alta: {formatDateAr(selB.purchaseDate || '2025-10-10')} · Vto PG: <strong>{formatDateAr(selB.germinationExpiryDate || '2026-10-10')}</strong>
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 pt-1 border-t border-emerald-100 dark:border-emerald-900/50">
-                              <span>Stock disponible para siembra:</span>
-                              <strong className="text-emerald-700 dark:text-emerald-300 text-[11px]">
-                                {batchInfo.kgFormatted} ({batchInfo.grFormatted})
-                              </strong>
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-
-                    <div>
-                      <label className={labelClass}>2. Variedad Genética (Sincronizada con el Lote Aprobado) *</label>
-                      <select 
-                        required 
-                        className={inputClass} 
-                        value={formData.varietyId} 
-                        onChange={e => {
-                          const nextVarId = e.target.value;
-                          const currentBatch = seedBatches.find(b => b.id === formData.seedBatchId);
-                          const nextBatch =
-                            currentBatch && currentBatch.varietyId === nextVarId
-                              ? currentBatch
-                              : availableBatches.find(b => b.varietyId === nextVarId);
-                          setFormData({
-                            ...formData,
-                            varietyId: nextVarId,
-                            seedBatchId: nextBatch ? nextBatch.id : formData.seedBatchId
-                          });
-                        }}
-                      >
-                        <option value="">Seleccionar cultivar...</option>
-                        {varieties.map(v => {
-                          const activeLotsForVar = availableBatches.filter(b => b.varietyId === v.id);
-                          const totalActiveKg = activeLotsForVar.reduce((acc, b) => acc + (b.remainingQuantity || 0), 0);
-                          return (
-                            <option key={v.id} value={v.id}>
-                              {v.name} ({v.usage}){activeLotsForVar.length > 0 ? ` — [${activeLotsForVar.length} lote(s) ACTIVO(S) · ${totalActiveKg.toFixed(3)} kg disp.]` : ''}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
-
-                    {/* CARGA DE SEMILLA A LA PARCELA EN T / KILOS / GRAMOS */}
-                    <div className="p-3 rounded-xl bg-white/90 dark:bg-slate-900/80 border border-emerald-200/80 dark:border-emerald-800/80 space-y-2.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <label className="text-[10px] font-mono font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
-                          <Scale size={12} className="text-emerald-600" />
-                          <span>Carga de Semilla a la Parcela (T / Kilos / Gramos) *</span>
-                        </label>
-                        {/* Selector rápido de unidad con conversión automática */}
-                        <div className="inline-flex rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 border border-slate-200 dark:border-slate-700">
-                          {([
-                            { unit: 'gr' as MassUnit, label: 'Gramos (gr)' },
-                            { unit: 'kg' as MassUnit, label: 'Kilos (kg)' },
-                            { unit: 'tn' as MassUnit, label: 'Toneladas (T)' }
-                          ]).map(uOpt => {
-                            const isCurrent = (formData.usedSeedUnit || 'kg') === uOpt.unit;
-                            return (
+              {/* CUERPO DEL FORMULARIO CON PESTAÑAS HORIZONTALES */}
+              <form onSubmit={handleSubmitAdd} className="flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 overflow-y-auto p-5 sm:p-6">
+                  
+                  {/* ====================================================================
+                      PESTAÑA 1: DATOS, CAMPO PADRE & DISEÑO AGRONÓMICO DBCA
+                  ==================================================================== */}
+                  {editModalTab === 'agronomic' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                      
+                      {/* Columna Izquierda (6 cols): Identidad, Establecimiento Padre, Proyecto y Campaña */}
+                      <div className="lg:col-span-6 space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                          <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                            01. Atribución Territorial, Proyecto & Campaña
+                          </h3>
+                          <div className="flex items-center gap-1.5">
+                            {COLOR_PALETTE.map(swatch => (
                               <button
-                                key={uOpt.unit}
+                                key={swatch.color}
                                 type="button"
-                                onClick={() => {
-                                  const currentKg = convertSeedMassToKg(formData.usedSeedValue, formData.usedSeedUnit || 'kg');
-                                  const convertedVal = convertKgToUnit(currentKg, uOpt.unit);
-                                  setFormData({
-                                    ...formData,
-                                    usedSeedUnit: uOpt.unit,
-                                    usedSeedValue: Number(convertedVal.toFixed(uOpt.unit === 'tn' ? 6 : uOpt.unit === 'kg' ? 4 : 1))
-                                  });
-                                }}
-                                className={`px-2 py-0.5 rounded-md text-[9.5px] font-mono font-bold transition cursor-pointer ${
-                                  isCurrent
-                                    ? 'bg-emerald-600 text-white shadow-sm'
-                                    : 'text-slate-600 dark:text-slate-300 hover:text-emerald-600'
+                                title={`Color: ${swatch.label}`}
+                                onClick={() => setFormData({ ...formData, color: swatch.color })}
+                                className={`w-5 h-5 rounded-full border-2 transition-transform cursor-pointer ${
+                                  formData.color === swatch.color
+                                    ? 'scale-110 border-slate-900 dark:border-white shadow-sm'
+                                    : 'border-transparent opacity-75 hover:opacity-100'
                                 }`}
-                              >
-                                {uOpt.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="col-span-2">
-                          <input 
-                            type="number" 
-                            step="any" 
-                            min="0" 
-                            placeholder="Ej: 75 gr o 0.075 kg"
-                            className={inputClass} 
-                            value={formData.usedSeedValue} 
-                            onChange={e => setFormData({ ...formData, usedSeedValue: Number(e.target.value) })} 
-                          />
-                        </div>
-                        <div>
-                          <select 
-                            className={inputClass} 
-                            value={formData.usedSeedUnit} 
-                            onChange={e => {
-                              const targetUnit = e.target.value as MassUnit;
-                              const currentKg = convertSeedMassToKg(formData.usedSeedValue, formData.usedSeedUnit || 'kg');
-                              const convertedVal = convertKgToUnit(currentKg, targetUnit);
-                              setFormData({
-                                ...formData,
-                                usedSeedUnit: targetUnit,
-                                usedSeedValue: Number(convertedVal.toFixed(targetUnit === 'tn' ? 6 : targetUnit === 'kg' ? 4 : 1))
-                              });
-                            }}
-                          >
-                            <option value="gr">Gramos (gr)</option>
-                            <option value="kg">Kilos (kg)</option>
-                            <option value="tn">Toneladas (T)</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      {/* Botones rápidos de carga por protocolo de ensayo o densidad */}
-                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                        <span className="text-[9px] font-mono text-slate-400 uppercase font-bold">Cargas frecuentes:</span>
-                        {[
-                          { label: '50 gr (La Regina)', val: 50, unit: 'gr' as MassUnit },
-                          { label: '60 gr', val: 60, unit: 'gr' as MassUnit },
-                          { label: '75 gr (Ascasubi)', val: 75, unit: 'gr' as MassUnit },
-                          { label: '150 gr', val: 150, unit: 'gr' as MassUnit },
-                          { label: '1 kg', val: 1, unit: 'kg' as MassUnit }
-                        ].map(preset => (
-                          <button
-                            key={preset.label}
-                            type="button"
-                            onClick={() =>
-                              setFormData({
-                                ...formData,
-                                usedSeedValue: preset.val,
-                                usedSeedUnit: preset.unit
-                              })
-                            }
-                            className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[9px] font-mono font-bold cursor-pointer transition"
-                          >
-                            {preset.label}
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* Panel en vivo de triple equivalencia (gr / kg / T) y densidad kg/ha */}
-                      {(() => {
-                        const loadSummary = formatPlotSeedLoad(formData.usedSeedValue, formData.usedSeedUnit);
-                        const areaHa =
-                          formData.surfaceUnit === 'ha'
-                            ? Number(formData.surfaceArea || 0)
-                            : Number(formData.surfaceArea || 0) / 10000;
-                        const eqKgHa = areaHa > 0 ? loadSummary.kg / areaHa : 0;
-
-                        return (
-                          <div className="p-2 rounded-lg bg-slate-900 text-white font-mono text-[10px] space-y-1">
-                            <div className="flex items-center justify-between">
-                              <span className="text-slate-400 uppercase text-[9px]">Equivalencia Trazable (gr · kg · T):</span>
-                              <strong className="text-emerald-400">
-                                {loadSummary.fullTriUnitDisplay}
-                              </strong>
-                            </div>
-                            {areaHa > 0 && (
-                              <div className="flex items-center justify-between text-[9.5px] pt-1 border-t border-slate-800 text-slate-300">
-                                <span>Densidad de Siembra Estimada:</span>
-                                <strong className="text-amber-300">{eqKgHa.toFixed(1)} kg/ha</strong>
-                              </div>
-                            )}
+                                style={{ backgroundColor: swatch.color }}
+                              />
+                            ))}
                           </div>
-                        );
-                      })()}
-                    </div>
-                  </div>
+                        </div>
 
-                  {/* PERSONAL INTERVINIENTE EN MUESTREO, SIEMBRA Y TRAZABILIDAD (ESTRICTAMENTE VINCULADO A USUARIOS DEL SISTEMA) */}
-                  <div className="p-4 bg-indigo-50/70 dark:bg-indigo-950/25 rounded-2xl border border-indigo-200 dark:border-indigo-900/50 space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-indigo-800 dark:text-indigo-300 flex items-center gap-1.5">
-                        <UserCheck size={14} className="text-indigo-600" />
-                        <span>Personal Interviniente (Usuarios & Roles Declarados)</span>
-                      </h3>
-                      <Link
-                        to="/users"
-                        className="text-[9.5px] font-mono font-bold text-indigo-700 dark:text-indigo-300 bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-indigo-300 dark:border-indigo-800 hover:bg-indigo-50"
-                        title="Ir al padrón de Usuarios & Roles para declarar nuevo personal"
-                      >
-                        + Declarar Usuario
-                      </Link>
-                    </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="sm:col-span-2">
+                            <label className={labelClass}>Identificador de Parcela / Lote *</label>
+                            <input
+                              required
+                              placeholder="Ej: P1 · LOTE-01 · ENSAYO-VIRCH-A"
+                              className={inputClass}
+                              value={formData.name}
+                              onChange={e => setFormData({ ...formData, name: e.target.value.toUpperCase() })}
+                            />
+                          </div>
 
-                    <p className="text-[10px] font-mono text-indigo-700/90 dark:text-indigo-300/90 bg-white/70 dark:bg-slate-900/60 px-2.5 py-1.5 rounded-lg border border-indigo-200/70 dark:border-indigo-800/50">
-                      🔒 <strong>Control de Trazabilidad:</strong> Solo personal registrado y con rol activo en el sistema puede asignarse a Muestreo, Siembra y Dirección Técnica.
-                    </p>
+                          <div className="sm:col-span-2">
+                            <label className={labelClass}>Establecimiento / Campo Padre * (Hereda Suelo, Riego y Geodesia)</label>
+                            <select
+                              required
+                              className={inputClass}
+                              value={formData.locationId}
+                              onChange={e => {
+                                const chosenLocId = e.target.value;
+                                const chosenLoc = locations.find(l => l.id === chosenLocId);
+                                const defs = getEstablishmentDefaults(chosenLocId);
+                                const updates: any = {
+                                  locationId: chosenLocId,
+                                  projectId: chosenLoc?.projectId || formData.projectId || projects[0]?.id || '',
+                                  soilType: chosenLoc?.soilType || 'Franco',
+                                  irrigationType: chosenLoc?.irrigationSystem || 'Goteo',
+                                  ownerName: chosenLoc?.ownerName || chosenLoc?.responsiblePerson || 'Red Nucleus',
+                                  samplingResponsibleName: formData.samplingResponsibleName || defs.sampler,
+                                  sowingResponsibleName: formData.sowingResponsibleName || defs.sower,
+                                  technicalResponsibleName: formData.technicalResponsibleName || defs.tech
+                                };
+                                if (chosenLoc?.coordinates?.lat && chosenLoc?.coordinates?.lng) {
+                                  if (!formData.polygon || formData.polygon.length === 0) {
+                                    updates.lat = chosenLoc.coordinates.lat.toString();
+                                    updates.lng = chosenLoc.coordinates.lng.toString();
+                                  }
+                                }
+                                setFormData((prev: any) => ({ ...prev, ...updates }));
+                              }}
+                            >
+                              <option value="">Seleccionar establecimiento habilitado...</option>
+                              {availableLocations.map(l => (
+                                <option key={l.id} value={l.id}>
+                                  {l.name} ({l.siteType || 'Campo'} · {l.city || l.province})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                    <div>
-                      <label className={labelClass}>1. Responsable Toma de Muestras en Lote *</label>
-                      <select
-                        required
-                        className={inputClass}
-                        value={formData.samplingResponsibleName || ''}
-                        onChange={e => setFormData({ ...formData, samplingResponsibleName: e.target.value })}
-                      >
-                        <option value="">Seleccionar usuario habilitado para muestreo...</option>
-                        {declaredSystemUsers.map(u => (
-                          <option key={`samp-${u.id}`} value={u.name}>
-                            {u.displayOption}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                          <div>
+                            <label className={labelClass}>Proyecto / Programa Científico</label>
+                            <select
+                              className={inputClass}
+                              value={formData.projectId || ''}
+                              onChange={e => setFormData({ ...formData, projectId: e.target.value })}
+                            >
+                              <option value="">Sin proyecto específico</option>
+                              {projects.map(proj => (
+                                <option key={proj.id} value={proj.id}>
+                                  {proj.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                    <div>
-                      <label className={labelClass}>2. Jefe Operativo de Siembra *</label>
-                      <select
-                        required
-                        className={inputClass}
-                        value={formData.sowingResponsibleName || ''}
-                        onChange={e => setFormData({ ...formData, sowingResponsibleName: e.target.value })}
-                      >
-                        <option value="">Seleccionar jefe operativo de siembra...</option>
-                        {declaredSystemUsers.map(u => (
-                          <option key={`sow-${u.id}`} value={u.name}>
-                            {u.displayOption}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                          <div>
+                            <label className={labelClass}>Fecha de Siembra (DD/MM/AAAA)</label>
+                            <DateInputAr
+                              className={inputClass}
+                              value={formData.sowingDate}
+                              onChange={val => setFormData({ ...formData, sowingDate: val })}
+                            />
+                          </div>
 
-                    <div>
-                      <label className={labelClass}>3. Director Técnico Agrónomo *</label>
-                      <select
-                        required
-                        className={inputClass}
-                        value={
-                          declaredSystemUsers.some(u => u.name === formData.technicalResponsibleName)
-                            ? formData.technicalResponsibleName
-                            : (formData.technicalResponsibleName || '').replace(/^Ing\.\s*Agr\.\s*/i, '')
-                        }
-                        onChange={e => {
-                          const chosenName = e.target.value;
-                          const chosenUser = declaredSystemUsers.find(u => u.name === chosenName);
-                          const isAgro = (chosenUser?.jobTitle || '').toLowerCase().includes('agr');
-                          setFormData({
-                            ...formData,
-                            technicalResponsibleName: isAgro && !chosenName.startsWith('Ing.') ? `Ing. Agr. ${chosenName}` : chosenName
-                          });
-                        }}
-                      >
-                        <option value="">Seleccionar Director Técnico / Agrónomo...</option>
-                        {declaredSystemUsers
-                          .filter(
-                            u =>
-                              u.role === 'technician' ||
-                              u.role === 'admin' ||
-                              u.role === 'super_admin' ||
-                              (u.jobTitle || '').toLowerCase().includes('agr')
-                          )
-                          .map(u => (
-                            <option key={`tech-${u.id}`} value={u.name}>
-                              {u.displayOption}
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-                  </div>
+                          <div>
+                            <label className={labelClass}>Tipo de Unidad Productiva</label>
+                            <select
+                              className={inputClass}
+                              value={formData.type}
+                              onChange={e => setFormData({ ...formData, type: e.target.value })}
+                            >
+                              <option value="Ensayo">Ensayo / Microparcela</option>
+                              <option value="Producción">Lote Comercial</option>
+                            </select>
+                          </div>
 
-                  <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 space-y-3">
-                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                      <Calendar size={14} className="text-emerald-500" />
-                      <span>Superficie & Fecha</span>
-                    </h3>
+                          <div>
+                            <label className={labelClass}>Estado Operativo</label>
+                            <select
+                              className={inputClass}
+                              value={formData.status}
+                              onChange={e => setFormData({ ...formData, status: e.target.value })}
+                            >
+                              <option value="Activa">Activa en Producción</option>
+                              <option value="Pausada">Pausada en Campaña</option>
+                              <option value="En Barbecho">En Barbecho</option>
+                              <option value="Cosechada">Cosechada</option>
+                              <option value="Cancelada">Cancelada</option>
+                            </select>
+                          </div>
 
-                    <div>
-                      <label className={labelClass}>Fecha de Siembra / Inicio (DD/MM/AAAA)</label>
-                      <DateInputAr
-                        className={inputClass}
-                        value={formData.sowingDate}
-                        onChange={val => setFormData({ ...formData, sowingDate: val })}
-                      />
-                    </div>
+                          <div>
+                            <label className={labelClass}>Campaña Agrícola Principal *</label>
+                            <select
+                              required
+                              className={inputClass}
+                              value={formData.campaign}
+                              onChange={e => {
+                                const nextCamp = e.target.value;
+                                const nextActive = Array.from(new Set([nextCamp, ...(formData.activeCampaigns || [])]));
+                                setFormData({ ...formData, campaign: nextCamp, activeCampaigns: nextActive });
+                              }}
+                            >
+                              {CAMPAIGNS.map(c => (
+                                <option key={c} value={c}>
+                                  Campaña {c} {c === '2025/2026' ? '(Actual)' : c === '2026/2027' ? '(Próxima)' : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className={labelClass}>Superficie</label>
-                        <input 
-                          type="number" 
-                          step="0.01" 
-                          className={inputClass} 
-                          value={formData.surfaceArea} 
-                          onChange={e => setFormData({ ...formData, surfaceArea: Number(e.target.value) })} 
-                        />
+                          <div>
+                            <label className={labelClass}>Campañas Habilitadas</label>
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                              {CAMPAIGNS.map(camp => {
+                                const isChecked = (formData.activeCampaigns || [formData.campaign]).includes(camp);
+                                return (
+                                  <button
+                                    key={camp}
+                                    type="button"
+                                    onClick={() => {
+                                      const curr = formData.activeCampaigns || [formData.campaign];
+                                      const next = isChecked
+                                        ? curr.filter((x: string) => x !== camp)
+                                        : [...curr, camp];
+                                      setFormData({
+                                        ...formData,
+                                        activeCampaigns: next.length > 0 ? next : [formData.campaign]
+                                      });
+                                    }}
+                                    className={`px-2.5 py-1.5 rounded-lg text-[10px] font-mono font-bold border transition cursor-pointer ${
+                                      isChecked
+                                        ? 'bg-emerald-600 text-white border-emerald-600'
+                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                                    }`}
+                                  >
+                                    {camp}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <label className={labelClass}>Unidad</label>
-                        <select 
-                          className={inputClass} 
-                          value={formData.surfaceUnit} 
-                          onChange={e => setFormData({ ...formData, surfaceUnit: e.target.value as any })}
-                        >
-                          <option value="ha">Hectáreas (Ha)</option>
-                          <option value="m2">Metros² (M2)</option>
-                        </select>
-                      </div>
-                    </div>
 
-                    <div>
-                      <label className={labelClass}>Observaciones Iniciales</label>
-                      <textarea 
-                        className={`${inputClass} h-16 resize-none`} 
-                        value={formData.observations} 
-                        onChange={e => setFormData({ ...formData, observations: e.target.value })} 
-                        placeholder="Densidad objetivo, sistema de riego, laboreo..." 
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* COLUMNA 3: GEOLOCALIZACIÓN Y POLÍGONO */}
-                <div className="space-y-4 flex flex-col justify-between">
-                  <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 flex-1 flex flex-col min-h-[380px]">
-                    <div className="flex justify-between items-center mb-3">
-                      <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                        <Globe size={14} className="text-emerald-500" />
-                        <span>Polígono & Coordenadas GPS</span>
-                      </h3>
-                      <div className="flex gap-2">
-                        <input type="file" accept=".kml" ref={fileInputRef} className="hidden" onChange={handleKMLUpload} />
-                        <button 
-                          type="button" 
-                          onClick={() => fileInputRef.current?.click()} 
-                          className="px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-[10px] font-mono font-bold uppercase tracking-wider border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-1 hover:bg-slate-100"
-                        >
-                          <FileUp size={11} /> KML
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Referencia contextual del Campo Padre */}
-                    {(() => {
-                      const parentLoc = locations.find(l => l.id === formData.locationId);
-                      if (!parentLoc) return null;
-                      return (
-                        <div className="mb-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px]">
-                          <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                            <MapPin size={13} className="text-emerald-500 shrink-0" />
-                            <span>Campo Padre: <strong>{parentLoc.name}</strong> ({parentLoc.city || parentLoc.province})</span>
-                          </span>
-                          {parentLoc.polygon && parentLoc.polygon.length > 2 && (
-                            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-mono font-bold bg-emerald-100/70 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-lg border border-emerald-500/20">
-                              Perímetro del campo visible
-                            </span>
+                      {/* Columna Derecha (6 cols): Herencia del Sitio Padre, Superficie & Marco DBCA */}
+                      <div className="lg:col-span-6 space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                          <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                            02. Herencia Edafoclimática & Marco de Siembra (DBCA)
+                          </h3>
+                          {formData.locationId && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const parentLoc = locations.find(l => l.id === formData.locationId);
+                                if (parentLoc) {
+                                  setFormData((prev: any) => ({
+                                    ...prev,
+                                    soilType: parentLoc.soilType || 'Franco',
+                                    irrigationType: parentLoc.irrigationSystem || 'Goteo',
+                                    ownerName: parentLoc.ownerName || parentLoc.responsiblePerson || 'Red Nucleus'
+                                  }));
+                                  setFormFeedback({
+                                    type: 'success',
+                                    message: `Suelo, riego y titular sincronizados con ${parentLoc.name}.`
+                                  });
+                                }
+                              }}
+                              className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
+                            >
+                              ↻ Re-sincronizar del Campo
+                            </button>
                           )}
                         </div>
-                      );
-                    })()}
 
-                    <div className="flex-1 min-h-[260px] rounded-xl overflow-hidden mb-3 bg-slate-900 border border-slate-200 dark:border-slate-700">
-                      <MapEditor 
-                        key={`plot-map-${formData.locationId || 'default'}-${editingPlot?.id || 'new'}`}
-                        initialCenter={
-                          formData.lat && formData.lng && !isNaN(parseFloat(formData.lat)) && !isNaN(parseFloat(formData.lng)) 
-                            ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) } 
-                            : (locations.find(l => l.id === formData.locationId)?.coordinates || undefined)
-                        } 
-                        initialPolygon={formData.polygon || []} 
-                        referencePolygon={locations.find(l => l.id === formData.locationId)?.polygon || []}
-                        extraPolygons={
-                          formData.locationId
-                            ? plots
-                                .filter(sp => sp.locationId === formData.locationId && sp.id !== editingPlot?.id && sp.polygon && sp.polygon.length >= 3)
-                                .map(sp => ({
-                                  id: sp.id,
-                                  polygon: sp.polygon!,
-                                  label: `${sp.name} (${sp.surfaceArea} ${sp.surfaceUnit})`,
-                                  shortLabel: sp.name,
-                                  subLabel: `${sp.surfaceArea} ${sp.surfaceUnit}`,
-                                  color: sp.color || '#0284c7'
-                                }))
-                            : []
-                        }
-                        polygonLabel={formData.name ? `Parcela ${formData.name}` : 'Perímetro Parcela'}
-                        polygonShortLabel={formData.name || 'NUEVA PARCELA'}
-                        polygonSubLabel={`${formData.surfaceArea || 9} ${formData.surfaceUnit || 'm2'}`}
-                        referenceLabel={locations.find(l => l.id === formData.locationId)?.name ? `Límite Campo: ${locations.find(l => l.id === formData.locationId)?.name}` : 'Perímetro Campo Padre'}
-                        onPolygonChange={handlePolygonChange} 
-                        height="100%" 
-                      />
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className={labelClass}>Suelo (Heredado)</label>
+                            <input
+                              className={inputClass}
+                              placeholder="Ej: Franco Arenoso"
+                              value={formData.soilType || ''}
+                              onChange={e => setFormData({ ...formData, soilType: e.target.value })}
+                            />
+                          </div>
+
+                          <div>
+                            <label className={labelClass}>Sistema Riego (Heredado)</label>
+                            <input
+                              className={inputClass}
+                              placeholder="Ej: Goteo"
+                              value={formData.irrigationType || ''}
+                              onChange={e => setFormData({ ...formData, irrigationType: e.target.value })}
+                            />
+                          </div>
+
+                          <div className="col-span-2 sm:col-span-1">
+                            <label className={labelClass}>Titular / Custodio</label>
+                            <input
+                              className={inputClass}
+                              placeholder="Ej: PatagonianC"
+                              value={formData.ownerName || ''}
+                              onChange={e => setFormData({ ...formData, ownerName: e.target.value })}
+                            />
+                          </div>
+
+                          <div>
+                            <label className={labelClass}>Superficie Declarada *</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0.01"
+                              className={inputClass}
+                              value={formData.surfaceArea}
+                              onChange={e => setFormData({ ...formData, surfaceArea: Number(e.target.value) })}
+                            />
+                          </div>
+
+                          <div>
+                            <label className={labelClass}>Unidad Superficie</label>
+                            <select
+                              className={inputClass}
+                              value={formData.surfaceUnit}
+                              onChange={e => setFormData({ ...formData, surfaceUnit: e.target.value as any })}
+                            >
+                              <option value="m2">Metros² (m²)</option>
+                              <option value="ha">Hectáreas (ha)</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className={labelClass}>Perímetro (m)</label>
+                            <input
+                              type="number"
+                              step="0.1"
+                              className={inputClass}
+                              value={formData.perimeter || 12}
+                              onChange={e => setFormData({ ...formData, perimeter: Number(e.target.value) })}
+                            />
+                          </div>
+
+                          <div>
+                            <label className={labelClass}>Bloque Experimental</label>
+                            <input
+                              className={inputClass}
+                              placeholder="Ej: Bloque 1"
+                              value={formData.block || ''}
+                              onChange={e => setFormData({ ...formData, block: e.target.value })}
+                            />
+                          </div>
+
+                          <div>
+                            <label className={labelClass}>Repetición DBCA</label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="20"
+                              className={inputClass}
+                              value={formData.replicate || 1}
+                              onChange={e => setFormData({ ...formData, replicate: Number(e.target.value) })}
+                            />
+                          </div>
+
+                          <div>
+                            <label className={labelClass}>Densidad Obj. (pl/m²)</label>
+                            <input
+                              type="number"
+                              step="1"
+                              min="1"
+                              className={inputClass}
+                              value={formData.density || 48}
+                              onChange={e => setFormData({ ...formData, density: Number(e.target.value) })}
+                            />
+                          </div>
+
+                          <div>
+                            <label className={labelClass}>Dist. Hileras (cm)</label>
+                            <input
+                              type="number"
+                              step="1"
+                              min="1"
+                              className={inputClass}
+                              value={formData.rowDistance || 20}
+                              onChange={e => setFormData({ ...formData, rowDistance: Number(e.target.value) })}
+                            />
+                          </div>
+
+                          <div className="col-span-2">
+                            <label className={labelClass}>Observaciones Agronómicas</label>
+                            <input
+                              className={inputClass}
+                              value={formData.observations || ''}
+                              onChange={e => setFormData({ ...formData, observations: e.target.value })}
+                              placeholder="Notas sobre cama de siembra, riego, bloque..."
+                            />
+                          </div>
+                        </div>
+
+                        {/* Resumen de Cálculo Agronómico en Vivo */}
+                        <div className="p-3 rounded-xl bg-slate-100/80 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 grid grid-cols-3 gap-2 font-mono text-xs tabular-nums">
+                          <div>
+                            <span className="text-[9px] uppercase text-slate-400 block">Área en m² / ha</span>
+                            <strong className="text-slate-900 dark:text-white">
+                              {relHealth.areaM2.toLocaleString('es-AR')} m² ({relHealth.areaHa.toFixed(4)} ha)
+                            </strong>
+                          </div>
+                          <div>
+                            <span className="text-[9px] uppercase text-slate-400 block">Población Objetivo</span>
+                            <strong className="text-emerald-600 dark:text-emerald-400">
+                              {relHealth.estimatedPlantsCount.toLocaleString('es-AR')} plantas
+                            </strong>
+                          </div>
+                          <div>
+                            <span className="text-[9px] uppercase text-slate-400 block">Marco de Plantación</span>
+                            <strong className="text-slate-900 dark:text-white">
+                              {formData.density || 48} pl/m² · {formData.rowDistance || 20} cm
+                            </strong>
+                          </div>
+                        </div>
+                      </div>
                     </div>
+                  )}
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className={labelClass}>Latitud</label>
-                        <input 
-                          placeholder="-33.1235" 
-                          className={inputClass} 
-                          value={formData.lat} 
-                          onChange={e => setFormData({ ...formData, lat: e.target.value })} 
+                  {/* ====================================================================
+                      PESTAÑA 2: SEMILLA CERTIFICADA INASE, STOCK & PERSONAL DECLARADO
+                  ==================================================================== */}
+                  {editModalTab === 'traceability' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                      
+                      {/* Columna Izquierda (6 cols): Lote de Semilla INASE, Variedad y Carga */}
+                      <div className="lg:col-span-6 space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                          <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                            01. Lote de Semilla Certificada INASE & Carga
+                          </h3>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setIsSeedScannerOpen(true)}
+                              className="text-[10px] font-mono font-bold text-white bg-emerald-600 hover:bg-emerald-500 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition"
+                            >
+                              <ScanLine size={11} />
+                              <span>Escanear QR</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setIsProtocolModalOpen(true)}
+                              className="text-[10px] font-mono font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center gap-1 cursor-pointer"
+                            >
+                              <FileText size={11} />
+                              <span>Anexo II</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div>
+                            <label className={labelClass}>Lote Disponible en Stock Activo (QA Aprobado) *</label>
+                            <select
+                              className={inputClass}
+                              value={formData.seedBatchId}
+                              onChange={e => {
+                                const chosenId = e.target.value;
+                                const chosenB = seedBatches.find(b => b.id === chosenId);
+                                setFormData({
+                                  ...formData,
+                                  seedBatchId: chosenId,
+                                  varietyId: chosenB?.varietyId || formData.varietyId
+                                });
+                              }}
+                            >
+                              <option value="">Seleccione lote aprobado ({availableBatches.length} disp.)...</option>
+                              {availableBatches
+                                .slice()
+                                .sort((a, b) => {
+                                  const aMatch = formData.varietyId && a.varietyId === formData.varietyId ? 0 : 1;
+                                  const bMatch = formData.varietyId && b.varietyId === formData.varietyId ? 0 : 1;
+                                  return aMatch - bMatch;
+                                })
+                                .map(b => {
+                                  const vName = varieties.find(v => v.id === b.varietyId)?.name || 'Homologada';
+                                  const spName = storagePoints.find(s => s.id === b.storagePointId)?.name || 'Almacén';
+                                  return (
+                                    <option key={b.id} value={b.id}>
+                                      {b.batchCode} · {vName} · Disp: {Number(b.remainingQuantity || 0).toFixed(3)} kg ({Math.round(Number(b.remainingQuantity || 0) * 1000)} gr) · {spName}
+                                    </option>
+                                  );
+                                })}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className={labelClass}>Variedad Genética (Sincronizada con el Lote) *</label>
+                            <select
+                              required
+                              className={inputClass}
+                              value={formData.varietyId}
+                              onChange={e => {
+                                const nextVarId = e.target.value;
+                                const currentBatch = seedBatches.find(b => b.id === formData.seedBatchId);
+                                const nextBatch =
+                                  currentBatch && currentBatch.varietyId === nextVarId
+                                    ? currentBatch
+                                    : availableBatches.find(b => b.varietyId === nextVarId);
+                                setFormData({
+                                  ...formData,
+                                  varietyId: nextVarId,
+                                  seedBatchId: nextBatch ? nextBatch.id : formData.seedBatchId
+                                });
+                              }}
+                            >
+                              <option value="">Seleccionar cultivar...</option>
+                              {varieties.map(v => {
+                                const activeLotsForVar = availableBatches.filter(b => b.varietyId === v.id);
+                                const totalActiveKg = activeLotsForVar.reduce((acc, b) => acc + (b.remainingQuantity || 0), 0);
+                                return (
+                                  <option key={v.id} value={v.id}>
+                                    {v.name} ({v.usage}){activeLotsForVar.length > 0 ? ` — [${activeLotsForVar.length} lote(s) · ${totalActiveKg.toFixed(3)} kg]` : ''}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </div>
+
+                          {/* Control de Carga en Gramos / Kilos / Toneladas */}
+                          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 space-y-2.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10px] font-mono font-bold uppercase text-slate-600 dark:text-slate-300">
+                                Carga de Semilla Asignada a la Parcela
+                              </span>
+                              <div className="inline-flex rounded-lg bg-white dark:bg-slate-900 p-0.5 border border-slate-200 dark:border-slate-700">
+                                {([
+                                  { unit: 'gr' as MassUnit, label: 'gr' },
+                                  { unit: 'kg' as MassUnit, label: 'kg' },
+                                  { unit: 'tn' as MassUnit, label: 'T' }
+                                ]).map(uOpt => {
+                                  const isCurrent = (formData.usedSeedUnit || 'kg') === uOpt.unit;
+                                  return (
+                                    <button
+                                      key={uOpt.unit}
+                                      type="button"
+                                      onClick={() => {
+                                        const currentKg = convertSeedMassToKg(formData.usedSeedValue, formData.usedSeedUnit || 'kg');
+                                        const convertedVal = convertKgToUnit(currentKg, uOpt.unit);
+                                        setFormData({
+                                          ...formData,
+                                          usedSeedUnit: uOpt.unit,
+                                          usedSeedValue: Number(convertedVal.toFixed(uOpt.unit === 'tn' ? 6 : uOpt.unit === 'kg' ? 4 : 1))
+                                        });
+                                      }}
+                                      className={`px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold transition cursor-pointer ${
+                                        isCurrent
+                                          ? 'bg-emerald-600 text-white'
+                                          : 'text-slate-600 dark:text-slate-300 hover:text-emerald-600'
+                                      }`}
+                                    >
+                                      {uOpt.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2">
+                              <div className="col-span-2">
+                                <input
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  className={inputClass}
+                                  value={formData.usedSeedValue}
+                                  onChange={e => setFormData({ ...formData, usedSeedValue: Number(e.target.value) })}
+                                />
+                              </div>
+                              <div className="flex items-center px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-mono font-bold text-slate-700 dark:text-slate-300">
+                                {formData.usedSeedUnit === 'gr' ? 'Gramos (gr)' : formData.usedSeedUnit === 'tn' ? 'Toneladas (T)' : 'Kilos (kg)'}
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-[9.5px] font-mono text-slate-400">Presets:</span>
+                              {[
+                                { label: '50 gr (La Regina)', val: 50, unit: 'gr' as MassUnit },
+                                { label: '60 gr', val: 60, unit: 'gr' as MassUnit },
+                                { label: '75 gr (Ascasubi)', val: 75, unit: 'gr' as MassUnit },
+                                { label: '150 gr', val: 150, unit: 'gr' as MassUnit },
+                                { label: '1 kg', val: 1, unit: 'kg' as MassUnit }
+                              ].map(preset => (
+                                <button
+                                  key={preset.label}
+                                  type="button"
+                                  onClick={() =>
+                                    setFormData({
+                                      ...formData,
+                                      usedSeedValue: preset.val,
+                                      usedSeedUnit: preset.unit
+                                    })
+                                  }
+                                  className="px-2 py-0.5 rounded bg-white dark:bg-slate-900 hover:bg-emerald-50 text-emerald-700 dark:text-emerald-300 border border-slate-200 dark:border-slate-700 text-[9.5px] font-mono font-bold cursor-pointer transition"
+                                >
+                                  {preset.label}
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* Barra de Equivalencia y Balance de Stock en Vivo */}
+                            <div className="p-2.5 rounded-lg bg-slate-900 text-white font-mono text-[10px] tabular-nums space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-slate-400">Equivalencia (gr · kg · T):</span>
+                                <strong className="text-emerald-400">{loadSummary.fullTriUnitDisplay}</strong>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-slate-400">Densidad de Siembra Estimada:</span>
+                                <strong className="text-amber-300">{eqKgHa.toFixed(1)} kg/ha</strong>
+                              </div>
+                              {relHealth.seedBatch && (
+                                <div className="flex items-center justify-between pt-1 border-t border-slate-800">
+                                  <span className="text-slate-400">Stock Lote Post-Guardado:</span>
+                                  <strong className={stockPreview.isValid ? 'text-sky-300' : 'text-rose-400'}>
+                                    {stockPreview.isValid && typeof stockPreview.newSelectedBatchRemainingKg === 'number'
+                                      ? `${stockPreview.newSelectedBatchRemainingKg.toFixed(3)} kg disp.`
+                                      : 'Excede stock disponible'}
+                                  </strong>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Columna Derecha (6 cols): Personal Interviniente + Matriz de Integridad Relacional */}
+                      <div className="lg:col-span-6 space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                          <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                            02. Personal Declarado & Integridad Relacional
+                          </h3>
+                          <Link
+                            to="/users"
+                            className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                          >
+                            + Padrón de Usuarios
+                          </Link>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="sm:col-span-2">
+                            <label className={labelClass}>1. Responsable Toma de Muestras en Lote *</label>
+                            <select
+                              required
+                              className={inputClass}
+                              value={formData.samplingResponsibleName || ''}
+                              onChange={e => setFormData({ ...formData, samplingResponsibleName: e.target.value })}
+                            >
+                              <option value="">Seleccionar responsable habilitado...</option>
+                              {declaredSystemUsers.map(u => (
+                                <option key={`samp-${u.id}`} value={u.name}>
+                                  {u.displayOption}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="sm:col-span-2">
+                            <label className={labelClass}>2. Jefe Operativo de Siembra *</label>
+                            <select
+                              required
+                              className={inputClass}
+                              value={formData.sowingResponsibleName || ''}
+                              onChange={e => setFormData({ ...formData, sowingResponsibleName: e.target.value })}
+                            >
+                              <option value="">Seleccionar jefe operativo de siembra...</option>
+                              {declaredSystemUsers.map(u => (
+                                <option key={`sow-${u.id}`} value={u.name}>
+                                  {u.displayOption}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className={labelClass}>3. Director Técnico Agrónomo *</label>
+                            <select
+                              required
+                              className={inputClass}
+                              value={
+                                declaredSystemUsers.some(u => u.name === formData.technicalResponsibleName)
+                                  ? formData.technicalResponsibleName
+                                  : (formData.technicalResponsibleName || '').replace(/^Ing\.\s*Agr\.\s*/i, '')
+                              }
+                              onChange={e => {
+                                const chosenName = e.target.value;
+                                const chosenUser = declaredSystemUsers.find(u => u.name === chosenName);
+                                const isAgro = (chosenUser?.jobTitle || '').toLowerCase().includes('agr');
+                                setFormData({
+                                  ...formData,
+                                  technicalResponsibleName: isAgro && !chosenName.startsWith('Ing.') ? `Ing. Agr. ${chosenName}` : chosenName
+                                });
+                              }}
+                            >
+                              <option value="">Seleccionar Director Técnico...</option>
+                              {declaredSystemUsers
+                                .filter(
+                                  u =>
+                                    u.role === 'technician' ||
+                                    u.role === 'admin' ||
+                                    u.role === 'super_admin' ||
+                                    (u.jobTitle || '').toLowerCase().includes('agr')
+                                )
+                                .map(u => (
+                                  <option key={`tech-${u.id}`} value={u.name}>
+                                    {u.displayOption}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className={labelClass}>Matrícula Profesional</label>
+                            <input
+                              className={inputClass}
+                              placeholder="Ej: MP CIAFBA 14.892"
+                              value={formData.technicalResponsibleMatricula || ''}
+                              onChange={e => setFormData({ ...formData, technicalResponsibleMatricula: e.target.value })}
+                            />
+                          </div>
+                        </div>
+
+                        {/* MATRIZ DE VINCULACIÓN CON EL RESTO DE LOS DATOS DEL SISTEMA */}
+                        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 space-y-2 font-mono text-[11px]">
+                          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-1.5">
+                            <span className="text-[10px] font-bold uppercase text-slate-500">
+                              Estado de Relación con Entidades del Sistema
+                            </span>
+                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                              {relHealth.isFullyLinked ? '✓ Integridad Verificada' : 'Pendiente Completar'}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 tabular-nums">
+                            <div>
+                              <span className="text-[9px] uppercase text-slate-400 block">Campo & Socio Productor</span>
+                              <strong className="text-slate-800 dark:text-slate-200 truncate block">
+                                {relHealth.parentLocation?.name || 'S/D'} · {relHealth.parentClient?.name || 'Red Nucleus'}
+                              </strong>
+                            </div>
+                            <div>
+                              <span className="text-[9px] uppercase text-slate-400 block">Lote INASE & Certificación</span>
+                              <strong className="text-slate-800 dark:text-slate-200 truncate block">
+                                {relHealth.seedBatch?.batchCode || 'Sin lote'} (Cert #{relHealth.seedBatch?.certificationNumber || '103'})
+                              </strong>
+                            </div>
+                            <div>
+                              <span className="text-[9px] uppercase text-slate-400 block">Órdenes de Labor Vinculadas</span>
+                              <strong className="text-indigo-600 dark:text-indigo-400 block">
+                                {relHealth.linkedTasksCount} tarea(s) en Cuaderno de Campo
+                              </strong>
+                            </div>
+                            <div>
+                              <span className="text-[9px] uppercase text-slate-400 block">Biometría & SENASA</span>
+                              <strong className="text-emerald-600 dark:text-emerald-400 block">
+                                {relHealth.linkedRecordsCount} mediciones · {relHealth.linkedAgroAppsCount} aplic.
+                              </strong>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ====================================================================
+                      PESTAÑA 3: MAPA SATELITAL HORIZONTAL WIDESCREEN (16:9) & POLÍGONO GPS
+                  ==================================================================== */}
+                  {editModalTab === 'map' && (
+                    <div className="space-y-4">
+                      {/* Barra Horizontal Superior de Coordenadas, Superficie y Generador Automático de Polígono */}
+                      <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 flex flex-col xl:flex-row xl:items-end justify-between gap-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1">
+                          <div>
+                            <label className={labelClass}>Latitud Centroide (WGS84)</label>
+                            <input
+                              placeholder="-43.308576"
+                              className={inputClass}
+                              value={formData.lat}
+                              onChange={e => setFormData({ ...formData, lat: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <label className={labelClass}>Longitud Centroide (WGS84)</label>
+                            <input
+                              placeholder="-65.289047"
+                              className={inputClass}
+                              value={formData.lng}
+                              onChange={e => setFormData({ ...formData, lng: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <label className={labelClass}>Superficie ({formData.surfaceUnit})</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              className={inputClass}
+                              value={formData.surfaceArea}
+                              onChange={e => setFormData({ ...formData, surfaceArea: Number(e.target.value) })}
+                            />
+                          </div>
+                          <div>
+                            <label className={labelClass}>Perímetro Geodésico (m)</label>
+                            <input
+                              type="number"
+                              step="0.1"
+                              className={inputClass}
+                              value={formData.perimeter || 12}
+                              onChange={e => setFormData({ ...formData, perimeter: Number(e.target.value) })}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={handleGeneratePolygonFromSurface}
+                            className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-sm cursor-pointer transition whitespace-nowrap"
+                            title="Genera automáticamente un polígono rectangular de 4 vértices centrado en las coordenadas con la superficie exacta declarada"
+                          >
+                            <Layers size={14} />
+                            <span>Generar Polígono por Superficie ({formData.surfaceArea} {formData.surfaceUnit})</span>
+                          </button>
+
+                          {relHealth.parentLocation?.coordinates && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const c = relHealth.parentLocation!.coordinates!;
+                                setFormData((prev: any) => ({
+                                  ...prev,
+                                  lat: c.lat.toFixed(6),
+                                  lng: c.lng.toFixed(6)
+                                }));
+                              }}
+                              className="px-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                              title="Traer coordenadas del Establecimiento Padre"
+                            >
+                              <MapPin size={13} className="text-emerald-500" />
+                              <span>Centrar en Campo</span>
+                            </button>
+                          )}
+
+                          <input type="file" accept=".kml" ref={fileInputRef} className="hidden" onChange={handleKMLUpload} />
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="px-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                          >
+                            <FileUp size={13} className="text-sky-500" />
+                            <span>Importar KML</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* VISOR SATELITAL HORIZONTAL PANORÁMICO (ANCHO COMPLETO 100% · 440PX DE ALTO) */}
+                      <div className="w-full h-[440px] rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm">
+                        <MapEditor
+                          key={`plot-horizontal-map-${formData.locationId || 'default'}-${editingPlot?.id || 'new'}`}
+                          activePlotId={editingPlot?.id || 'active-edit-plot'}
+                          initialCenter={
+                            formData.lat && formData.lng && !isNaN(parseFloat(formData.lat)) && !isNaN(parseFloat(formData.lng))
+                              ? { lat: parseFloat(formData.lat), lng: parseFloat(formData.lng) }
+                              : (relHealth.parentLocation?.coordinates || undefined)
+                          }
+                          initialPolygon={formData.polygon || []}
+                          referencePolygon={relHealth.parentLocation?.polygon || []}
+                          extraPolygons={
+                            formData.locationId
+                              ? plots
+                                  .filter(
+                                    sp =>
+                                      sp.locationId === formData.locationId &&
+                                      sp.id !== editingPlot?.id &&
+                                      sp.polygon &&
+                                      sp.polygon.length >= 3
+                                  )
+                                  .map(sp => ({
+                                    id: sp.id,
+                                    polygon: sp.polygon!,
+                                    label: `${sp.name} (${sp.surfaceArea} ${sp.surfaceUnit})`,
+                                    shortLabel: sp.name,
+                                    subLabel: `${sp.surfaceArea} ${sp.surfaceUnit}`,
+                                    color: sp.color || '#0284c7'
+                                  }))
+                              : []
+                          }
+                          polygonLabel={formData.name ? `Parcela ${formData.name}` : 'Perímetro Parcela'}
+                          polygonShortLabel={formData.name || 'NUEVA PARCELA'}
+                          polygonSubLabel={`${formData.surfaceArea || 9} ${formData.surfaceUnit || 'm2'}`}
+                          referenceLabel={
+                            relHealth.parentLocation?.name
+                              ? `Límite Campo: ${relHealth.parentLocation.name}`
+                              : 'Perímetro Campo Padre'
+                          }
+                          onPolygonChange={handlePolygonChange}
+                          height="440px"
                         />
                       </div>
-                      <div>
-                        <label className={labelClass}>Longitud</label>
-                        <input 
-                          placeholder="-64.3492" 
-                          className={inputClass} 
-                          value={formData.lng} 
-                          onChange={e => setFormData({ ...formData, lng: e.target.value })} 
-                        />
-                      </div>
                     </div>
-                  </div>
+                  )}
+
                 </div>
 
-              </div>
+                {/* PIE DE MODAL FIJO (SIEMPRE VISIBLE SIN IMPORTAR LA PESTAÑA ACTIVA) */}
+                <div className="px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900 flex flex-wrap items-center justify-between gap-3 shrink-0">
+                  <div className="flex items-center gap-2 text-xs font-mono text-slate-500">
+                    <span>
+                      Pestaña activa: <strong className="text-slate-800 dark:text-slate-200">{editModalTab === 'agronomic' ? '1/3 Datos & DBCA' : editModalTab === 'traceability' ? '2/3 Semilla & Personal' : '3/3 Mapa Satelital Horizontal'}</strong>
+                    </span>
+                  </div>
 
-              {/* Botonera de Guardado */}
-              <div className="flex justify-end pt-5 border-t border-slate-100 dark:border-slate-800 gap-3">
-                <button 
-                  type="button" 
-                  disabled={isSaving} 
-                  onClick={() => setIsAddModalOpen(false)} 
-                  className="px-5 py-2.5 text-slate-500 font-mono font-bold uppercase text-xs hover:text-slate-700"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={isSaving} 
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-2.5 rounded-xl font-mono font-bold text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/20 flex items-center gap-2 transition disabled:opacity-50 active:scale-95"
-                >
-                  {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                  <span>{editingPlot ? 'Actualizar Unidad' : 'Registrar Unidad'}</span>
-                </button>
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => setIsAddModalOpen(false)}
+                      className="px-4 py-2 text-slate-600 dark:text-slate-400 font-mono font-bold uppercase text-xs hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSaving}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl font-mono font-bold text-xs uppercase tracking-wider shadow-md flex items-center gap-2 transition disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSaving ? <Loader2 className="animate-spin" size={15} /> : <Save size={15} />}
+                      <span>{editingPlot ? 'Guardar Cambios de Unidad' : 'Registrar Unidad Productiva'}</span>
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* MODAL SEGURO DE CONFIRMACIÓN DE ELIMINACIÓN DE PARCELA (REEMPLAZA WINDOW.CONFIRM) */}
+      {plotPendingDelete && (
+        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-rose-500/10 text-rose-600 border border-rose-500/20 shrink-0">
+                <Trash2 size={20} />
               </div>
-            </form>
+              <div>
+                <h3 className="text-base font-black uppercase text-slate-900 dark:text-white">
+                  Confirmar Eliminación de Parcela
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  ¿Está seguro de eliminar la unidad productiva <strong>{plotPendingDelete.name}</strong> ({plotPendingDelete.surfaceArea} {plotPendingDelete.surfaceUnit})? Esta acción removerá la parcela del padrón activo.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setPlotPendingDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeletePlot}
+                className="px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase bg-rose-600 hover:bg-rose-500 text-white shadow-sm cursor-pointer"
+              >
+                Eliminar Unidad
+              </button>
+            </div>
           </div>
         </div>
       )}

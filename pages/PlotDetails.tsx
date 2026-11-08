@@ -1214,13 +1214,23 @@ export default function PlotDetails() {
           {/* Botonera de Acciones */}
           <div className="flex flex-wrap items-center gap-2 no-print">
             {canCreate && (
-              <button
-                onClick={() => navigate(`/plots?editPlotId=${plot.id}`)}
-                className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer"
-              >
-                <Edit2 size={13} />
-                <span>Editar</span>
-              </button>
+              <>
+                <button
+                  onClick={() => navigate(`/plots?editPlotId=${plot.id}`)}
+                  className="px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Edit2 size={13} />
+                  <span>Editar Datos</span>
+                </button>
+                <button
+                  onClick={() => navigate(`/plots?editPlotId=${plot.id}&tab=map`)}
+                  className="px-3.5 py-2 bg-sky-50 dark:bg-sky-950/60 hover:bg-sky-100 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60 rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer"
+                  title="Editar Mapa Satelital Horizontal y Polígono GPS"
+                >
+                  <Compass size={13} />
+                  <span>Editar Mapa</span>
+                </button>
+              </>
             )}
 
             <button

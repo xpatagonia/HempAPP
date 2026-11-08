@@ -255,6 +255,7 @@ export interface Location {
   coordinates?: { lat: number; lng: number };
   polygon?: { lat: number; lng: number }[]; // Perímetro General del Establecimiento
   clientId?: string;
+  projectId?: string | null;
   ownerName?: string;
   ownerLegalName?: string;
   ownerCuit?: string;

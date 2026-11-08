@@ -414,7 +414,11 @@ export default function MapEditor({
 
     useEffect(() => {
         if (initialPolygon) {
-            setPolygon(prev => (areCoordsEqual(prev, initialPolygon) ? prev : initialPolygon));
+            setPolygon(prev => {
+                if (areCoordsEqual(prev, initialPolygon)) return prev;
+                setFitTrigger(t => t + 1);
+                return initialPolygon;
+            });
         }
     }, [initialPolygon]);
 
@@ -567,6 +571,63 @@ export default function MapEditor({
                     calculateAreaHa(newPoly),
                     calculateCentroid(newPoly),
                     calculatePerimeterMeters(newPoly)
+                );
+            }
+        }
+    };
+
+    const handleVertexDragEnd = (idx: number, newLatLng: L.LatLng, target: 'general' | 'sowing' = 'general') => {
+        if (readOnly) return;
+        const updatedPoint = { lat: Number(newLatLng.lat.toFixed(6)), lng: Number(newLatLng.lng.toFixed(6)) };
+        if (target === 'sowing') {
+            const nextSowing = sowingPoly.map((pt, i) => (i === idx ? updatedPoint : pt));
+            setSowingPoly(nextSowing);
+            if (onSowingPolygonChange) {
+                onSowingPolygonChange(
+                    nextSowing,
+                    calculateAreaHa(nextSowing),
+                    calculateCentroid(nextSowing),
+                    calculatePerimeterMeters(nextSowing)
+                );
+            }
+        } else {
+            const nextPoly = polygon.map((pt, i) => (i === idx ? updatedPoint : pt));
+            setPolygon(nextPoly);
+            if (onPolygonChange) {
+                onPolygonChange(
+                    nextPoly,
+                    calculateAreaHa(nextPoly),
+                    calculateCentroid(nextPoly),
+                    calculatePerimeterMeters(nextPoly)
+                );
+            }
+        }
+    };
+
+    const handleUndoLastVertex = () => {
+        if (readOnly) return;
+        if (enableSowingLayer && activeEditTarget === 'sowing') {
+            if (sowingPoly.length === 0) return;
+            const nextSowing = sowingPoly.slice(0, -1);
+            setSowingPoly(nextSowing);
+            if (onSowingPolygonChange) {
+                onSowingPolygonChange(
+                    nextSowing,
+                    calculateAreaHa(nextSowing),
+                    calculateCentroid(nextSowing),
+                    calculatePerimeterMeters(nextSowing)
+                );
+            }
+        } else {
+            if (polygon.length === 0) return;
+            const nextPoly = polygon.slice(0, -1);
+            setPolygon(nextPoly);
+            if (onPolygonChange) {
+                onPolygonChange(
+                    nextPoly,
+                    calculateAreaHa(nextPoly),
+                    calculateCentroid(nextPoly),
+                    calculatePerimeterMeters(nextPoly)
                 );
             }
         }
@@ -1340,15 +1401,27 @@ export default function MapEditor({
                     )}
 
                     {!readOnly && (
-                        <button
-                            onClick={handleClearActiveLayer}
-                            className="flex items-center text-[10px] text-rose-300 hover:text-white font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-500/30 transition-colors cursor-pointer ml-1"
-                            type="button"
-                            title={enableSowingLayer && activeEditTarget === 'sowing' ? 'Limpiar Polígono DDJJ Siembra' : 'Limpiar Perímetro'}
-                        >
-                            <Trash2 size={12} className="mr-1" />
-                            <span>Limpiar</span>
-                        </button>
+                        <>
+                            {((enableSowingLayer && activeEditTarget === 'sowing' ? sowingPoly.length : polygon.length) > 0) && (
+                                <button
+                                    onClick={handleUndoLastVertex}
+                                    className="flex items-center text-[10px] text-amber-300 hover:text-white font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900 border border-amber-500/30 transition-colors cursor-pointer ml-1"
+                                    type="button"
+                                    title="Deshacer el último vértice agregado"
+                                >
+                                    <span>↶ Deshacer</span>
+                                </button>
+                            )}
+                            <button
+                                onClick={handleClearActiveLayer}
+                                className="flex items-center text-[10px] text-rose-300 hover:text-white font-mono font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-500/30 transition-colors cursor-pointer ml-1"
+                                type="button"
+                                title={enableSowingLayer && activeEditTarget === 'sowing' ? 'Limpiar Polígono DDJJ Siembra' : 'Limpiar Perímetro'}
+                            >
+                                <Trash2 size={12} className="mr-1" />
+                                <span>Limpiar</span>
+                            </button>
+                        </>
                     )}
                 </div>
             </div>
@@ -1734,10 +1807,21 @@ export default function MapEditor({
                     {activeEditTarget === 'general' &&
                         !readOnly &&
                         polygon.map((pos, idx) => (
-                            <Marker key={`gen-marker-${idx}`} position={[pos.lat, pos.lng]} icon={generalVertexIcon}>
+                            <Marker
+                                key={`gen-marker-${idx}`}
+                                position={[pos.lat, pos.lng]}
+                                icon={generalVertexIcon}
+                                draggable={true}
+                                eventHandlers={{
+                                    dragend: e => {
+                                        const marker = e.target as L.Marker;
+                                        handleVertexDragEnd(idx, marker.getLatLng(), 'general');
+                                    }
+                                }}
+                            >
                                 <Tooltip direction="top" offset={[0, -6]}>
                                     <span className="font-mono text-[10px] font-bold">
-                                        V{idx + 1}: {pos.lat.toFixed(6)}, {pos.lng.toFixed(6)}
+                                        V{idx + 1}: {pos.lat.toFixed(6)}, {pos.lng.toFixed(6)} (Arrastrar para ajustar)
                                     </span>
                                 </Tooltip>
                             </Marker>
@@ -1746,7 +1830,18 @@ export default function MapEditor({
                     {activeEditTarget === 'sowing' &&
                         !readOnly &&
                         sowingPoly.map((pos, idx) => (
-                            <Marker key={`sow-marker-${idx}`} position={[pos.lat, pos.lng]} icon={sowingVertexIcon} />
+                            <Marker
+                                key={`sow-marker-${idx}`}
+                                position={[pos.lat, pos.lng]}
+                                icon={sowingVertexIcon}
+                                draggable={true}
+                                eventHandlers={{
+                                    dragend: e => {
+                                        const marker = e.target as L.Marker;
+                                        handleVertexDragEnd(idx, marker.getLatLng(), 'sowing');
+                                    }
+                                }}
+                            />
                         ))}
 
                     {/* Pin de centroide con etiqueta permanente cuando no hay polígono trazado aún */}
@@ -1763,12 +1858,12 @@ export default function MapEditor({
             </div>
 
             {!readOnly && (
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-[1000] bg-slate-900/90 text-white px-4 py-2 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider pointer-events-none flex items-center shadow-2xl border border-white/20 backdrop-blur-md">
-                    <MousePointer size={12} className="mr-2 animate-pulse text-emerald-400" />
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-[1000] bg-slate-900/90 text-white px-4 py-1.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider pointer-events-none flex items-center shadow-2xl border border-white/20 backdrop-blur-md whitespace-nowrap">
+                    <MousePointer size={12} className="mr-2 text-emerald-400" />
                     <span>
                         {enableSowingLayer && activeEditTarget === 'sowing'
-                            ? 'Haz clic en el mapa satelital para trazar el polígono de DDJJ de Siembra'
-                            : 'Haz clic en el mapa satelital para trazar los vértices de la parcela'}
+                            ? 'Clic en el mapa para agregar vértices DDJJ · Arrastra cualquier vértice para ajustar'
+                            : 'Clic en el mapa para agregar vértices · Arrastra V1..Vn para ajustar el perímetro'}
                     </span>
                 </div>
             )}

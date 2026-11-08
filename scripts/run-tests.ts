@@ -7,7 +7,14 @@ import {
     calculateWaterEfficiency,
     calculateCarbonFootprint
 } from '../src/services/agro40Service.js';
-import { DEMO_PLOTS, DEMO_LOCATIONS, DEMO_CLIENTS } from '../src/data/initialDemoData.js';
+import { DEMO_PLOTS, DEMO_LOCATIONS, DEMO_CLIENTS, DEMO_VARIETIES, DEMO_SEED_BATCHES, DEMO_PROJECTS, DEMO_TASKS, DEMO_TRIALS, DEMO_AGROCHEMICAL_APPLICATIONS } from '../src/data/initialDemoData.js';
+import {
+    sanitizePlotInputText,
+    canUserEditOrMutatePlot,
+    computeDifferentialSeedStockAdjustment,
+    generateGeodesicPolygonFromSurface,
+    evaluatePlotRelationalHealth
+} from '../src/utils/plotManagementUtils.js';
 import {
     createPendingPublicRegistration,
     evaluateUserLoginGate,
@@ -998,6 +1005,121 @@ test("12.3 Ciclo Completo de Acreditación: Captura de Mapa, Instructivo Paso a 
     const loginGateAfterAccreditation = evaluateUserLoginGate(accreditedVisitor);
     assert.equal(loginGateAfterAccreditation.canProceedToPasswordCheck, false, "El visitante acreditado a un evento NUNCA debe poder iniciar sesión en la plataforma operativa");
     assert.equal(loginGateAfterAccreditation.blockedReason, 'event_visitor_no_system_access');
+});
+
+console.log("\n--- GRUPO 13: Auditoría Funcional, Relacional, Geodésica y de Seguridad en Parcelas y Cultivo ---");
+
+test("13.1 Integridad Relacional Completa de Parcelas (Campo Padre, Socio, Variedad, Lote INASE, Proyecto y Población de Plantas)", () => {
+    assert.ok(DEMO_PLOTS.length >= 1, "Debe existir al menos una parcela en la base de datos demostrativa");
+
+    for (const plot of DEMO_PLOTS) {
+        const health = evaluatePlotRelationalHealth(plot, {
+            locations: DEMO_LOCATIONS,
+            clients: DEMO_CLIENTS,
+            varieties: DEMO_VARIETIES,
+            seedBatches: DEMO_SEED_BATCHES,
+            projects: DEMO_PROJECTS,
+            tasks: DEMO_TASKS,
+            trialRecords: DEMO_TRIALS,
+            agroApps: DEMO_AGROCHEMICAL_APPLICATIONS
+        });
+
+        assert.ok(health.parentLocation, `La parcela "${plot.name}" debe estar vinculada a un Establecimiento/Campo padre válido`);
+        assert.ok(health.variety, `La parcela "${plot.name}" debe estar vinculada a una Variedad Genética válida`);
+        assert.equal(health.isFullyLinked, true, `La parcela "${plot.name}" debe tener integridad relacional completa`);
+        assert.ok(health.areaM2 >= 0, `La superficie en m² de "${plot.name}" debe ser no negativa`);
+        assert.ok(health.areaHa >= 0, `La superficie en ha de "${plot.name}" debe ser no negativa`);
+        assert.equal(health.estimatedPlantsCount, Math.round(health.areaM2 * (Number(plot.density) || 48)), "La población estimada de plantas debe coincidir con m² × densidad");
+    }
+});
+
+test("13.2 Ajuste Diferencial de Stock de Semilla INASE en Edición y Generación Automática de Polígono Geodésico Horizontal", () => {
+    const sampleBatch = { ...DEMO_SEED_BATCHES[0], remainingQuantity: 100 };
+    const testBatches = [sampleBatch, ...DEMO_SEED_BATCHES.slice(1)];
+    assert.ok(sampleBatch, "Debe existir un lote de semilla INASE para la prueba");
+
+    // 1. Creación inicial de parcela consumiendo 15 kg
+    const createDiff = computeDifferentialSeedStockAdjustment({
+        editingPlot: null,
+        nextSeedBatchId: sampleBatch.id,
+        nextUsedKg: 15,
+        seedBatches: testBatches
+    });
+    assert.equal(createDiff.isValid, true);
+    assert.equal(createDiff.deltaSelectedBatchKg, 15);
+    assert.equal(createDiff.oldBatchId, undefined);
+    assert.equal(createDiff.newSelectedBatchRemainingKg, 85);
+
+    // 2. Edición de la misma parcela cambiando de 15 kg a 20 kg (solo debe descontar la diferencia de +5 kg, nunca 20 kg de nuevo)
+    const editSameBatchDiff = computeDifferentialSeedStockAdjustment({
+        editingPlot: {
+            ...DEMO_PLOTS[0],
+            seedBatchId: sampleBatch.id,
+            usedSeedQuantity: 15,
+            usedSeedValue: 15,
+            usedSeedUnit: 'kg'
+        },
+        nextSeedBatchId: sampleBatch.id,
+        nextUsedKg: 20,
+        seedBatches: testBatches
+    });
+    assert.equal(editSameBatchDiff.isValid, true);
+    assert.equal(editSameBatchDiff.deltaSelectedBatchKg, 5, "Al editar una parcela en el mismo lote, solo se debe descontar el diferencial (+5 kg)");
+    assert.equal(editSameBatchDiff.newSelectedBatchRemainingKg, 95);
+    assert.equal(editSameBatchDiff.oldBatchId, undefined);
+
+    // 3. Generación geodésica de polígono de 1 ha en Trelew (-43.308362, -65.289033)
+    const polyResult = generateGeodesicPolygonFromSurface(-43.308362, -65.289033, 1, 'ha');
+    assert.equal(polyResult.polygon.length, 4, "El polígono generado debe tener 4 vértices geodésicos");
+    assert.equal(polyResult.areaM2, 10000, "1 ha equivale a 10.000 m²");
+    assert.ok(polyResult.perimeterM >= 400 && polyResult.perimeterM <= 425, "El perímetro de 1 ha rectangular 4:3 debe rondar los 404 metros");
+});
+
+test("13.3 Blindaje RBAC, Anti-IDOR (?editPlotId) y Sanitización Anti-XSS en Edición y Eliminación de Parcelas", () => {
+    const targetPlot = DEMO_PLOTS[0];
+
+    // Sanitización Anti-XSS
+    const dirtyPlotName = '  Parcela <script>alert("xss")</script> javascript:evil() onclick=steal() Norte  ';
+    const cleanPlotName = sanitizePlotInputText(dirtyPlotName, 120);
+    assert.ok(!cleanPlotName.includes('<') && !cleanPlotName.includes('>'), "No debe permitir etiquetas HTML");
+    assert.ok(!cleanPlotName.toLowerCase().includes('javascript:'), "No debe permitir protocolo javascript:");
+    assert.ok(!cleanPlotName.toLowerCase().includes('onclick='), "No debe permitir manejadores de eventos inline");
+
+    // 1. Visitante de evento (event_attendee) bloqueado
+    const eventVisitorPerm = canUserEditOrMutatePlot(
+        { id: 'v-1', name: 'Visitante', email: 'v@test.com', role: 'admin', accessScope: 'event_attendee' },
+        targetPlot,
+        DEMO_LOCATIONS,
+        DEMO_CLIENTS
+    );
+    assert.equal(eventVisitorPerm.allowed, false, "Un asistente de evento jamás puede mutar parcelas aunque intente inyectar rol admin");
+
+    // 2. Rol viewer bloqueado ante intento de edición por URL (?editPlotId=...)
+    const viewerPerm = canUserEditOrMutatePlot(
+        { id: 'u-viewer', name: 'Observador', email: 'obs@test.com', role: 'viewer' },
+        targetPlot,
+        DEMO_LOCATIONS,
+        DEMO_CLIENTS
+    );
+    assert.equal(viewerPerm.allowed, false, "El rol viewer de solo lectura no puede editar ni eliminar parcelas");
+
+    // 3. Cliente de otro establecimiento bloqueado (Anti-IDOR cruzado)
+    const foreignClientPerm = canUserEditOrMutatePlot(
+        { id: 'u-client-foreign', name: 'Productor Ajeno', email: 'ajeno@test.com', role: 'client', clientId: 'client-inexistente-999', assignedLocationIds: ['loc-inexistente-999'] },
+        targetPlot,
+        DEMO_LOCATIONS,
+        DEMO_CLIENTS
+    );
+    assert.equal(foreignClientPerm.allowed, false, "Un productor no puede editar parcelas de otro establecimiento (protección Anti-IDOR)");
+
+    // 4. Super Admin y Admin autorizados
+    const adminPerm = canUserEditOrMutatePlot(
+        { id: 'u-admin', name: 'Admin Central', email: 'admin@hempc.com.ar', role: 'super_admin' },
+        targetPlot,
+        DEMO_LOCATIONS,
+        DEMO_CLIENTS
+    );
+    assert.equal(adminPerm.allowed, true, "El Super Admin debe tener permiso para editar parcelas");
 });
 
 console.log("\n=================================================");
