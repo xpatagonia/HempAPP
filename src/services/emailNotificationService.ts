@@ -962,6 +962,153 @@ export async function sendEventAccreditationApprovedEmail(
   }
 }
 
+export interface SendEventStatusUpdateParams {
+  toEmail: string;
+  toName: string;
+  stage: 'actualizacion_programa' | 'suspension_clima';
+  eventId: string;
+  eventName: string;
+  eventDateLabel: string;
+  venueName: string;
+  locality: string;
+  address?: string;
+  lat?: number;
+  lng?: number;
+  routeInstructions?: string;
+  ticketCode: string;
+  noticeMessage: string;
+  addedActivitiesText?: string;
+  rescheduledDate?: string;
+  organizationName?: string;
+  dniNumber?: string;
+  phone?: string;
+  issuedBy?: string;
+  actionUrl?: string;
+}
 
+/**
+ * Envía notificación oficial de:
+ * 1) ACTUALIZACIÓN DEL EVENTO (`actualizacion_programa`): Nuevas actividades, ajustes de cronograma o locación georreferenciada.
+ * 2) SUSPENSIÓN / REPROGRAMACIÓN POR CONDICIONES CLIMÁTICAS (`suspension_clima`): Aviso meteorológico preventivo preservando la validez del Pase QR.
+ */
+export async function sendEventStatusUpdateEmail(
+  params: SendEventStatusUpdateParams
+): Promise<EmailDispatchResult> {
+  const timestamp = new Date().toISOString();
+  const cleanEmail = params.toEmail.trim();
+  const cleanName = params.toName.trim();
+  const lat =
+    typeof params.lat === 'number' && !isNaN(params.lat) && params.lat !== 0
+      ? params.lat
+      : -43.308362;
+  const lng =
+    typeof params.lng === 'number' && !isNaN(params.lng) && params.lng !== 0
+      ? params.lng
+      : -65.289033;
+  const address =
+    params.address || 'Chacra 23 Parcela 13, Ruta Nacional 3 Km 1462 (Acceso Sur Trelew)';
+  const routeInstructions =
+    params.routeInstructions ||
+    `Dirigirse por ruta principal de ${params.locality} hacia ${address} (${params.venueName}).`;
 
+  const defaultActionUrl =
+    params.actionUrl ||
+    `${window.location.origin}/#/login?pase_qr=${encodeURIComponent(
+      params.ticketCode
+    )}&email=${encodeURIComponent(cleanEmail)}&name=${encodeURIComponent(
+      cleanName
+    )}&dni=${encodeURIComponent(params.dniNumber || '')}&phone=${encodeURIComponent(
+      params.phone || ''
+    )}&org=${encodeURIComponent(
+      params.organizationName || 'Visitante Acreditado'
+    )}&loc=${encodeURIComponent(params.locality || 'VIRCH – Trelew, Chubut')}&evtid=${encodeURIComponent(
+      params.eventId || ''
+    )}&lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`;
 
+  const notificationType =
+    params.stage === 'suspension_clima' ? 'event_weather_suspension' : 'event_update';
+  const subject =
+    params.stage === 'suspension_clima'
+      ? `⛈️ AVISO CLIMÁTICO OFICIAL: Suspensión / Reprogramación — ${params.eventName} (${params.ticketCode})`
+      : `🔄 ACTUALIZACIÓN DE EVENTO Y ACTIVIDADES: ${params.eventName} (${params.eventDateLabel})`;
+
+  const payload = {
+    to_email: cleanEmail,
+    to_name: cleanName,
+    subject,
+    notification_type: notificationType,
+    role_name: 'Asistente Registrado a Jornada',
+    structure_name: params.organizationName || 'Visitante de Jornada',
+    action_url: defaultActionUrl,
+    extra_data: {
+      event_id: params.eventId,
+      event_name: params.eventName,
+      event_date: params.eventDateLabel,
+      venue_name: params.venueName,
+      locality: params.locality,
+      address,
+      lat: String(lat),
+      lng: String(lng),
+      route_instructions: routeInstructions,
+      ticket_code: params.ticketCode,
+      stage: params.stage,
+      notice_message: params.noticeMessage,
+      added_activities: params.addedActivitiesText || '',
+      rescheduled_date: params.rescheduledDate || '',
+      issued_by: params.issuedBy || 'Administración Oficial de Eventos HempC'
+    }
+  };
+
+  try {
+    const data = await postEmailViaVercelResend(payload);
+    const result: EmailDispatchResult = {
+      success: Boolean(data.success !== false),
+      message:
+        data.message ||
+        `Comunicado oficial (${params.stage === 'suspension_clima' ? 'Suspensión Climática' : 'Actualización de Actividades'}) enviado a ${cleanEmail}`,
+      sentFrom: data.sent_from || 'notificaciones@hempc.com.ar',
+      sentTo: data.sent_to || cleanEmail,
+      deliveredVia: data.delivered_via || 'vercel_resend',
+      timestamp
+    };
+
+    saveEmailAuditEntry({
+      id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp,
+      toEmail: cleanEmail,
+      toName: cleanName,
+      type: 'agronomic_alert',
+      subject,
+      roleName: params.stage === 'suspension_clima' ? 'Aviso Suspensión Climática' : 'Actualización de Evento',
+      structureName: params.venueName,
+      sentFrom: result.sentFrom,
+      status: isRealDelivery(result.deliveredVia) ? 'enviado' : 'simulado',
+      deliveredVia: result.deliveredVia
+    });
+
+    return result;
+  } catch (err: any) {
+    saveEmailAuditEntry({
+      id: `email-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp,
+      toEmail: cleanEmail,
+      toName: cleanName,
+      type: 'agronomic_alert',
+      subject,
+      roleName: params.stage === 'suspension_clima' ? 'Aviso Suspensión Climática' : 'Actualización de Evento',
+      structureName: params.venueName,
+      sentFrom: 'notificaciones@hempc.com.ar',
+      status: 'simulado',
+      deliveredVia: 'simulated_local'
+    });
+
+    return {
+      success: true,
+      message: `Comunicado oficial registrado para ${cleanEmail}`,
+      sentFrom: 'notificaciones@hempc.com.ar',
+      sentTo: cleanEmail,
+      deliveredVia: 'simulated_local',
+      timestamp
+    };
+  }
+}

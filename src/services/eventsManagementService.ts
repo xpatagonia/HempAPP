@@ -1,5 +1,13 @@
 import jsPDF from 'jspdf';
-import { User, FieldEvent, FieldEventCategory, FieldEventStatus, Location, Client } from '../../types';
+import {
+  User,
+  FieldEvent,
+  FieldEventCategory,
+  FieldEventStatus,
+  FieldEventNotificationStage,
+  Location,
+  Client
+} from '../../types';
 import { EVENT_SCHEDULE_ITEMS } from './eventProgramPdfService';
 
 export const OFFICIAL_SEMBRA_EVENT_ID = 'evt-un-dia-de-siembra-2026';
@@ -13,8 +21,10 @@ export const CATEGORY_LABELS: Record<FieldEventCategory, string> = {
 
 export const STATUS_LABELS: Record<FieldEventStatus, string> = {
   inscripcion_abierta: 'Inscripción Abierta',
+  actualizado_programa: 'Actualizado (Nuevas Actividades)',
   cupo_completo: 'Cupo Completo',
   reprogramado_clima: 'Reprogramado por Clima',
+  suspendido_clima: 'Suspendido por Clima',
   en_curso: 'En Curso Hoy',
   finalizado: 'Jornada Finalizada'
 };
@@ -978,6 +988,7 @@ export function createOrUpdateFieldEventByAdmin(params: {
     ? dateObj.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })
     : eventData.date;
 
+  const computedDateLabel = `${formattedDate.charAt(0).toUpperCase()}${formattedDate.slice(1)} • ${startTime} a ${endTime} hs`;
   const navFallback = buildEventGpsNavigationLinks(eventData);
 
   const savedEvent: FieldEvent = {
@@ -987,7 +998,7 @@ export function createOrUpdateFieldEventByAdmin(params: {
     subtitle: eventData.subtitle || 'Actividad Oficial de Campo • Red Cooperativa HempC',
     category: eventData.category || 'visita_programada',
     date: eventData.date,
-    dateLabel: eventData.dateLabel || `${formattedDate} • ${startTime} a ${endTime} hs`,
+    dateLabel: computedDateLabel,
     startTime,
     endTime,
     venueName: eventData.venueName.trim(),
@@ -1058,6 +1069,11 @@ export function createOrUpdateFieldEventByAdmin(params: {
               description: eventData.description || 'Desarrollo del cronograma técnico en establecimiento.'
             }
           ],
+    lastNotificationType: eventData.lastNotificationType,
+    lastNotificationMessage: eventData.lastNotificationMessage,
+    lastNotificationSentAt: eventData.lastNotificationSentAt,
+    lastNotificationRecipientsCount: eventData.lastNotificationRecipientsCount,
+    rescheduledDate: eventData.rescheduledDate,
     createdBy: adminUser.name,
     createdAt: eventData.createdAt || new Date().toISOString().split('T')[0]
   };
@@ -1068,6 +1084,168 @@ export function createOrUpdateFieldEventByAdmin(params: {
     : [savedEvent, ...existingEvents];
 
   return { savedEvent, updatedList };
+}
+
+/**
+ * Sanitiza texto administrativo para avisos de eventos (prevención Anti-XSS e inyección HTML).
+ */
+export function sanitizeEventNoticeText(raw: string | undefined | null, maxLength = 900): string {
+  if (!raw) return '';
+  return String(raw)
+    .replace(/<[^>]*>?/gm, '')
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+\s*=/gi, '')
+    .trim()
+    .slice(0, maxLength);
+}
+
+/**
+ * Prepara y aplica la transición oficial de un Evento hacia uno de los 2 estadios de notificación:
+ * 1) `actualizacion_programa`: Notificación por incorporación de nuevas actividades, cambios de horario,
+ *    modificación de cronograma o ajuste de punto de encuentro georreferenciado.
+ * 2) `suspension_clima`: Notificación urgente de suspensión preventiva o reprogramación por condiciones
+ *    climáticas adversas (lluvia / alerta de viento en campo a cielo abierto), preservando los Pases QR.
+ */
+export function prepareEventNotificationStageByAdmin(params: {
+  adminUser: User | null | undefined;
+  event: FieldEvent;
+  stage: FieldEventNotificationStage;
+  noticeMessage: string;
+  addedActivitiesText?: string;
+  rescheduledDate?: string;
+  newStartTime?: string;
+  newEndTime?: string;
+  targetScope?: 'all_registered' | 'only_accredited';
+  allUsers: User[];
+  allEvents: FieldEvent[];
+}): {
+  updatedEvent: FieldEvent;
+  targetAttendees: User[];
+  subjectLine: string;
+  cleanMessage: string;
+} {
+  const {
+    adminUser,
+    event,
+    stage,
+    noticeMessage,
+    addedActivitiesText,
+    rescheduledDate,
+    newStartTime,
+    newEndTime,
+    targetScope = 'all_registered',
+    allUsers,
+    allEvents
+  } = params;
+
+  if (
+    !adminUser ||
+    adminUser.accessScope === 'event_attendee' ||
+    (adminUser.role !== 'admin' && adminUser.role !== 'super_admin')
+  ) {
+    throw new Error(
+      'Acceso denegado: Solo los Administradores pueden emitir notificaciones de actualización o suspensión de eventos.'
+    );
+  }
+
+  const cleanMessage = sanitizeEventNoticeText(noticeMessage, 900);
+  if (!cleanMessage) {
+    throw new Error('Debe ingresar el detalle del comunicado oficial para enviar a los asistentes.');
+  }
+
+  const cleanAddedActivities = sanitizeEventNoticeText(addedActivitiesText, 600);
+  const nowIso = new Date().toISOString();
+
+  // Filtrar los inscriptos que pertenecen a este evento (excluyendo rechazados)
+  const { eventAttendees, systemUsers } = partitionUsersByScope(allUsers || []);
+  const combinedPool = new Map<string, User>();
+  eventAttendees.forEach(u => combinedPool.set(u.id, u));
+  systemUsers.forEach(u => {
+    if (u.eventRegistered || u.eventTicketCode) combinedPool.set(u.id, u);
+  });
+
+  const targetAttendees = Array.from(combinedPool.values()).filter(att => {
+    if (!att.email || !att.email.includes('@')) return false;
+    const attEvtId = resolveAttendeeEventId(att, allEvents);
+    if (attEvtId !== event.id) return false;
+    const status = resolveEventAccreditationStatus(att);
+    if (status === 'rejected') return false;
+    if (targetScope === 'only_accredited') {
+      return status === 'accredited' || status === 'checked_in';
+    }
+    return true;
+  });
+
+  let nextStatus: FieldEventStatus = event.status;
+  let nextDate = event.date;
+  let nextStartTime = newStartTime?.trim() || event.startTime;
+  let nextEndTime = newEndTime?.trim() || event.endTime;
+  let nextDescription = event.description || '';
+  let nextWeatherWarning = event.weatherWarning || '';
+  let nextScheduleItems = [...(event.scheduleItems || [])];
+
+  if (stage === 'actualizacion_programa') {
+    nextStatus = 'actualizado_programa';
+    if (cleanAddedActivities) {
+      nextDescription = nextDescription
+        ? `${nextDescription}\n• Actualización de Actividades: ${cleanAddedActivities}`
+        : `Actualización de Actividades: ${cleanAddedActivities}`;
+      nextScheduleItems.push({
+        time: `${nextStartTime} – ${nextEndTime}`,
+        block: 'Actividad Incorporada / Modificación Oficial',
+        subBlock: 'Actualización de Programa',
+        audience: 'Inscriptos y Acreditados',
+        description: cleanAddedActivities
+      });
+    }
+  } else {
+    // stage === 'suspension_clima'
+    if (rescheduledDate && /^\d{4}-\d{2}-\d{2}$/.test(rescheduledDate.trim())) {
+      nextStatus = 'reprogramado_clima';
+      nextDate = rescheduledDate.trim();
+    } else {
+      nextStatus = 'suspendido_clima';
+    }
+    nextWeatherWarning = `AVISO CLIMÁTICO OFICIAL: ${cleanMessage}`;
+  }
+
+  const dateObj = new Date(`${nextDate}T12:00:00`);
+  const formattedDate = !isNaN(dateObj.getTime())
+    ? dateObj.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })
+    : nextDate;
+  const nextDateLabel = `${formattedDate.charAt(0).toUpperCase()}${formattedDate.slice(1)} • ${nextStartTime} a ${nextEndTime} hs`;
+
+  const updatedEvent: FieldEvent = {
+    ...event,
+    status: nextStatus,
+    date: nextDate,
+    dateLabel: nextDateLabel,
+    startTime: nextStartTime,
+    endTime: nextEndTime,
+    description: nextDescription,
+    weatherWarning: nextWeatherWarning,
+    scheduleItems: nextScheduleItems,
+    rescheduledDate:
+      stage === 'suspension_clima' && rescheduledDate?.trim()
+        ? rescheduledDate.trim()
+        : event.rescheduledDate,
+    lastNotificationType: stage,
+    lastNotificationMessage: cleanMessage,
+    lastNotificationSentAt: nowIso,
+    lastNotificationRecipientsCount: targetAttendees.length
+  };
+
+  const subjectLine =
+    stage === 'actualizacion_programa'
+      ? `🔄 Actualización de Actividades y Cronograma: ${updatedEvent.title} (${updatedEvent.dateLabel})`
+      : `⛈️ AVISO IMPORTANTE — Suspensión / Reprogramación por Condiciones Climáticas: ${updatedEvent.title}`;
+
+  return {
+    updatedEvent,
+    targetAttendees,
+    subjectLine,
+    cleanMessage
+  };
 }
 
 /**

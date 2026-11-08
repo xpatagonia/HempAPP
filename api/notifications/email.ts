@@ -818,6 +818,161 @@ function buildRegistrationApprovedHtml(req: EmailNotificationPayload): string {
   </html>`;
 }
 
+function buildEventUpdateOrSuspensionHtml(req: EmailNotificationPayload): string {
+  const extra = req.extra_data || {};
+  const isWeatherSuspension =
+    req.notification_type === 'event_weather_suspension' || extra.stage === 'suspension_clima';
+
+  const eventName = escapeHtml(extra.event_name || 'JORNADA OFICIAL DE CAMPO HEMPC');
+  const eventDate = escapeHtml(extra.event_date || 'Fecha Programada');
+  const venueName = escapeHtml(
+    extra.venue_name || 'Establecimiento La Regina — Chacra La Regina (PatagonianC)'
+  );
+  const locality = escapeHtml(extra.locality || 'VIRCH – Trelew, Chubut');
+  const address = escapeHtml(
+    extra.address || 'Chacra 23 Parcela 13, Ruta Nacional 3 Km 1462 (Acceso Sur Trelew)'
+  );
+  const rawLat = typeof extra.lat === 'number' && !isNaN(extra.lat)
+    ? extra.lat
+    : !isNaN(Number(extra.lat)) && Number(extra.lat) !== 0
+      ? Number(extra.lat)
+      : -43.308362;
+  const rawLng = typeof extra.lng === 'number' && !isNaN(extra.lng)
+    ? extra.lng
+    : !isNaN(Number(extra.lng)) && Number(extra.lng) !== 0
+      ? Number(extra.lng)
+      : -65.289033;
+  const gpsDecimal = `${rawLat.toFixed(6)}, ${rawLng.toFixed(6)}`;
+  const routeInstructions = escapeHtml(
+    extra.route_instructions ||
+      `Dirigirse por ruta principal de ${extra.locality || 'Trelew'} hacia ${extra.address || 'el establecimiento'}.`
+  );
+  const ticketCode = escapeHtml(extra.ticket_code || 'PASE-OFICIAL');
+  const noticeMessage = escapeHtml(
+    extra.notice_message ||
+      (isWeatherSuspension
+        ? 'Por condiciones meteorológicas adversas en el establecimiento a cielo abierto, la jornada se suspende preventivamente y pasa a reprogramación oficial.'
+        : 'Se han incorporado nuevas actividades y actualizaciones técnicas al programa oficial del evento.')
+  );
+  const addedActivities = escapeHtml(extra.added_activities || '');
+  const rescheduledDate = escapeHtml(extra.rescheduled_date || '');
+  const issuedBy = escapeHtml(extra.issued_by || 'Administración Oficial de Eventos HempC');
+  const toName = escapeHtml(req.to_name);
+
+  const googleMapsGpsUrl = `https://www.google.com/maps/dir/?api=1&destination=${rawLat},${rawLng}&travelmode=driving`;
+  const wazeGpsUrl = `https://waze.com/ul?ll=${rawLat},${rawLng}&navigate=yes`;
+  const actionUrl = sanitizeActionUrl(
+    req.action_url,
+    `https://red.hempc.com.ar/#/login?pase_qr=${encodeURIComponent(extra.ticket_code || 'PASE-OFICIAL')}&evtid=${encodeURIComponent(extra.event_id || '')}`
+  );
+
+  const headerBg = isWeatherSuspension ? '#7c2d12' : '#0c2d1e';
+  const headerAccent = isWeatherSuspension ? '#f59e0b' : '#DDDB00';
+  const badgeTitle = isWeatherSuspension
+    ? '⛈️ ESTADIO OFICIAL: SUSPENSIÓN / REPROGRAMACIÓN POR CONDICIONES CLIMÁTICAS'
+    : '🔄 ESTADIO OFICIAL: ACTUALIZACIÓN DE ACTIVIDADES Y CRONOGRAMA DEL EVENTO';
+
+  return `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; }
+      .container { max-width: 620px; margin: 0 auto; background: #ffffff; border-radius: 20px; border: 1px solid #cbd5e1; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.06); }
+      .header { background: ${headerBg}; padding: 28px 30px; color: #ffffff; border-left: 6px solid ${headerAccent}; }
+      .content { padding: 28px 30px; color: #334155; line-height: 1.6; }
+      .btn { display: inline-block; background: #006633; color: #ffffff !important; padding: 13px 24px; border-radius: 12px; font-weight: 900; text-decoration: none; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; }
+      .footer { background: #f8fafc; padding: 20px 30px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div style="font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase; color: ${headerAccent}; font-weight: 900; margin-bottom: 4px;">
+          ${badgeTitle}
+        </div>
+        <h1 style="margin: 4px 0 6px 0; font-size: 21px; font-weight: 900;">${eventName}</h1>
+        <div style="font-size: 12px; color: #f1f5f9; font-weight: 600;">
+          Sede: ${venueName} (${locality}) • Pase Registrado: <span style="font-family: monospace; color: ${headerAccent};">${ticketCode}</span>
+        </div>
+      </div>
+      <div class="content">
+        <p style="font-size: 15px; color: #0f172a; margin-top: 0;">Hola <strong>${toName}</strong>,</p>
+        <p style="font-size: 13px; color: #475569;">
+          ${
+            isWeatherSuspension
+              ? `Te informamos desde la Administración de <strong>EVENTOS Y JORNADAS HempC</strong> que, debido a las condiciones meteorológicas registradas para la actividad a cielo abierto en <strong>${venueName}</strong>, se ha dispuesto la <strong>SUSPENSIÓN PREVENTIVA / REPROGRAMACIÓN</strong> de la jornada.`
+              : `Te informamos desde la Administración de <strong>EVENTOS Y JORNADAS HempC</strong> que se ha emitido una <strong>ACTUALIZACIÓN OFICIAL DE ACTIVIDADES / MODIFICACIÓN</strong> para el evento <strong>${eventName}</strong>.`
+          }
+        </p>
+
+        <div style="background: ${isWeatherSuspension ? '#fffbeb' : '#f0fdf4'}; border: 2px solid ${isWeatherSuspension ? '#f59e0b' : '#006633'}; border-radius: 16px; padding: 18px 20px; margin: 20px 0;">
+          <div style="font-size: 11px; font-weight: 900; text-transform: uppercase; color: ${isWeatherSuspension ? '#b45309' : '#006633'}; letter-spacing: 1px; margin-bottom: 6px;">
+            ${isWeatherSuspension ? '⛈️ DETALLE DEL PARTE CLIMÁTICO Y REPROGRAMACIÓN' : '📋 DETALLE DE LA ACTUALIZACIÓN Y NUEVAS ACTIVIDADES'}
+          </div>
+          <p style="margin: 0; font-size: 13px; font-weight: 700; color: #0f172a; white-space: pre-line;">${noticeMessage}</p>
+          ${
+            addedActivities
+              ? `<div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed #86efac; font-size: 12px; color: #064e3b;">
+                  <strong>Actividades Incorporadas / Modificaciones del Cronograma:</strong><br/>
+                  <span style="white-space: pre-line;">${addedActivities}</span>
+                </div>`
+              : ''
+          }
+          ${
+            rescheduledDate
+              ? `<div style="margin-top: 12px; padding: 10px 12px; background: #ffffff; border-radius: 10px; border: 1px solid #fcd34d; font-size: 12px; color: #92400e; font-weight: 800;">
+                  📅 NUEVA FECHA PROGRAMADA: ${eventDate} (Fecha ISO: ${rescheduledDate})
+                </div>`
+              : `<div style="margin-top: 10px; font-size: 12px; color: #334155;">
+                  <strong>Fecha / Horario Registrado:</strong> ${eventDate}
+                </div>`
+          }
+        </div>
+
+        <div style="background: #0c2d1e; color: #ffffff; border-radius: 16px; padding: 16px 20px; margin: 18px 0;">
+          <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 1.4px; color: #6ee7b7; font-weight: 800;">
+            VALIDEZ DE TU ACREDITACIÓN Y PASE QR
+          </div>
+          <div style="font-size: 16px; font-weight: 900; font-family: monospace; color: #DDDB00; margin: 4px 0;">
+            PASE OFICIAL VIGENTE: ${ticketCode}
+          </div>
+          <p style="margin: 4px 0 0 0; font-size: 12px; color: #ecfdf5;">
+            Tu inscripción y tu código QR <strong>continúan 100% vigentes</strong>. No necesitás volver a registrarte. Emitido por: <strong>${issuedBy}</strong>.
+          </p>
+        </div>
+
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px 18px; margin: 18px 0; font-size: 12px;">
+          <div style="font-size: 11px; font-weight: 900; text-transform: uppercase; color: #006633; margin-bottom: 6px;">
+            📍 LOCACIÓN GEORREFERENCIADA Y ACCESO GPS (${venueName})
+          </div>
+          <div><strong>Dirección Vial:</strong> ${address} (${locality})</div>
+          <div><strong>Coordenadas GPS:</strong> <code style="font-family: monospace; font-weight: 900; color: #006633;">${gpsDecimal}</code></div>
+          <div style="margin-top: 4px; color: #475569;"><strong>Instructivo de Ruta:</strong> ${routeInstructions}</div>
+          <div style="margin-top: 12px;">
+            <a href="${googleMapsGpsUrl}" style="display: inline-block; background: #0284c7; color: #ffffff !important; padding: 8px 14px; border-radius: 8px; font-weight: 800; text-decoration: none; font-size: 11px; text-transform: uppercase; margin-right: 6px;">
+              📍 Google Maps GPS
+            </a>
+            <a href="${wazeGpsUrl}" style="display: inline-block; background: #0f172a; color: #DDDB00 !important; padding: 8px 14px; border-radius: 8px; font-weight: 800; text-decoration: none; font-size: 11px; text-transform: uppercase;">
+              🚗 Waze GPS
+            </a>
+          </div>
+        </div>
+
+        <div style="text-align: center; margin: 22px 0 10px 0;">
+          <a href="${actionUrl}" class="btn">Ver Mi Pase QR Actualizado y Mapa del Evento</a>
+        </div>
+      </div>
+      <div class="footer">
+        <div style="margin-bottom: 6px; font-weight: 800; color: #334155; font-size: 12px;">PatagonianC LTDA Cooperativa de Trabajo · Mat. INAES 68218 · CUIT: 30-71816113-0 · HempC</div>
+        <div style="font-size: 11px; color: #64748b;">Enviado por <strong>notificaciones@hempc.com.ar</strong> (Vercel + Resend HTTPS)</div>
+      </div>
+    </div>
+  </body>
+  </html>`;
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -858,6 +1013,10 @@ export default async function handler(req: any, res: any) {
       subject = `Confirmación de Inscripción: ${body.extra_data?.event_name || 'Jornada Oficial HempC'} (${body.extra_data?.event_date || 'Fecha Programada'}) • ${body.extra_data?.ticket_code || 'PASE'}`;
     } else if (body.notification_type === 'event_accreditation_approved') {
       subject = `✅ Acreditación Oficial Aprobada (${body.extra_data?.ticket_code || 'PASE QR'}) • ${body.extra_data?.event_name || 'Jornada de Campo HempC'}`;
+    } else if (body.notification_type === 'event_update') {
+      subject = `🔄 Actualización de Actividades y Cronograma: ${body.extra_data?.event_name || 'Jornada de Campo HempC'}`;
+    } else if (body.notification_type === 'event_weather_suspension') {
+      subject = `⛈️ AVISO CLIMÁTICO: Suspensión / Reprogramación — ${body.extra_data?.event_name || 'Jornada de Campo HempC'}`;
     } else if (body.notification_type === 'registration_approved') {
       subject = `Solicitud de Alta Aprobada (${body.role_name || 'Miembro'}) • Activá tu Contraseña en NUCLEUS`;
     } else if (body.notification_type === 'user_welcome') {
@@ -880,6 +1039,11 @@ export default async function handler(req: any, res: any) {
     htmlBody = buildEventRegistrationHtml(body);
   } else if (body.notification_type === 'event_accreditation_approved') {
     htmlBody = buildEventAccreditationApprovedHtml(body);
+  } else if (
+    body.notification_type === 'event_update' ||
+    body.notification_type === 'event_weather_suspension'
+  ) {
+    htmlBody = buildEventUpdateOrSuspensionHtml(body);
   } else if (body.notification_type === 'registration_approved') {
     htmlBody = buildRegistrationApprovedHtml(body);
   } else if (body.notification_type === 'user_welcome') {

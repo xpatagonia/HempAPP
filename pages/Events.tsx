@@ -29,14 +29,18 @@ import {
   Loader2,
   X,
   UserPlus,
-  Sparkles
+  Sparkles,
+  CloudRain,
+  RefreshCw,
+  Megaphone
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import {
   User,
   FieldEvent,
   FieldEventCategory,
-  FieldEventStatus
+  FieldEventStatus,
+  FieldEventNotificationStage
 } from '../types';
 import {
   OFFICIAL_SEMBRA_EVENT_ID,
@@ -60,10 +64,14 @@ import {
   resolveEventVenueFromSelection,
   parseCoordinateString,
   buildEventGpsNavigationLinks,
-  downloadEventCalendarICS
+  downloadEventCalendarICS,
+  prepareEventNotificationStageByAdmin
 } from '../src/services/eventsManagementService';
 import { downloadUnDiaDeSiembraProgramPDF } from '../src/services/eventProgramPdfService';
-import { sendEventAccreditationApprovedEmail } from '../src/services/emailNotificationService';
+import {
+  sendEventAccreditationApprovedEmail,
+  sendEventStatusUpdateEmail
+} from '../src/services/emailNotificationService';
 import EventRouteMapPreview from '../components/EventRouteMapPreview';
 
 export default function Events() {
@@ -148,6 +156,29 @@ export default function Events() {
   const [resendingPassId, setResendingPassId] = useState<string | null>(null);
   const [attendeeToDelete, setAttendeeToDelete] = useState<User | null>(null);
   const [isDeletingAttendee, setIsDeletingAttendee] = useState(false);
+
+  // Modal Oficial de Notificación de Dos Estadios: 1) Actualización de Actividades/Modificaciones, 2) Suspensión por Condiciones Climáticas
+  const [isNotifyStageModalOpen, setIsNotifyStageModalOpen] = useState(false);
+  const [isSendingStageNotification, setIsSendingStageNotification] = useState(false);
+  const [notifyStageForm, setNotifyStageForm] = useState<{
+    eventId: string;
+    stage: FieldEventNotificationStage;
+    noticeMessage: string;
+    addedActivitiesText: string;
+    rescheduledDate: string;
+    newStartTime: string;
+    newEndTime: string;
+    targetScope: 'all_registered' | 'only_accredited';
+  }>({
+    eventId: OFFICIAL_SEMBRA_EVENT_ID,
+    stage: 'actualizacion_programa',
+    noticeMessage: '',
+    addedActivitiesText: '',
+    rescheduledDate: '',
+    newStartTime: '',
+    newEndTime: '',
+    targetScope: 'all_registered'
+  });
 
   // Catálogo sincronizado de Establecimientos y Campos Habilitados en la Red
   const enabledEstablishments = useMemo(
@@ -681,6 +712,117 @@ export default function Events() {
     setIsEventModalOpen(true);
   };
 
+  // Abrir Modal Oficial de Notificación de Estadio: ACTUALIZACIÓN o SUSPENSIÓN POR CLIMA
+  const openNotifyStageModal = (evt: FieldEvent, stage: FieldEventNotificationStage) => {
+    const defaultUpdateMsg = `Se han incorporado nuevas actividades técnicas y actualizaciones operativas al cronograma de "${evt.title}" en ${evt.venueName} (${evt.locality}). Su Pase QR personal y las coordenadas GPS de acceso se mantienen vigentes.`;
+    const defaultWeatherMsg = `Por condiciones meteorológicas adversas en ${evt.locality} (pronóstico de lluvia / vientos intensos en campo abierto), se informa la suspensión preventiva de las actividades a campo de "${evt.title}" para resguardar la seguridad de los asistentes y el estado de los lotes. Su Pase QR conserva plena validez para la fecha reprogramada.`;
+
+    setNotifyStageForm({
+      eventId: evt.id,
+      stage,
+      noticeMessage: stage === 'suspension_clima' ? defaultWeatherMsg : defaultUpdateMsg,
+      addedActivitiesText:
+        stage === 'actualizacion_programa'
+          ? 'Parada Técnica Adicional: Demostración de calibración en lote y bloque de consultas con equipo agronómico.'
+          : '',
+      rescheduledDate: evt.rescheduledDate || '',
+      newStartTime: evt.startTime || '08:30',
+      newEndTime: evt.endTime || '15:00',
+      targetScope: 'all_registered'
+    });
+    setIsNotifyStageModalOpen(true);
+  };
+
+  // Ejecutar envío masivo/oficial del Estadio de Notificación (Actualización o Suspensión Climática)
+  const handleSendEventStageNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetEvt =
+      fieldEvents.find(ev => ev.id === notifyStageForm.eventId) || activeSelectedEvent || fieldEvents[0];
+    if (!targetEvt) return;
+
+    setIsSendingStageNotification(true);
+    try {
+      const prepared = prepareEventNotificationStageByAdmin({
+        adminUser: currentUser,
+        event: targetEvt,
+        allEvents: fieldEvents,
+        allUsers: usersList || [],
+        stage: notifyStageForm.stage,
+        noticeMessage: notifyStageForm.noticeMessage,
+        addedActivitiesText:
+          notifyStageForm.stage === 'actualizacion_programa'
+            ? notifyStageForm.addedActivitiesText
+            : undefined,
+        rescheduledDate:
+          notifyStageForm.stage === 'suspension_clima' && notifyStageForm.rescheduledDate
+            ? notifyStageForm.rescheduledDate
+            : undefined,
+        newStartTime: notifyStageForm.newStartTime || targetEvt.startTime,
+        newEndTime: notifyStageForm.newEndTime || targetEvt.endTime,
+        targetScope: notifyStageForm.targetScope
+      });
+
+      const savedEvt = await saveFieldEvent(prepared.updatedEvent);
+      const nav = buildEventGpsNavigationLinks(savedEvt);
+
+      let sentCount = 0;
+      for (const att of prepared.targetAttendees) {
+        if (!att.email) continue;
+        await sendEventStatusUpdateEmail({
+          toEmail: att.email,
+          toName: att.name,
+          eventId: savedEvt.id,
+          eventName: savedEvt.title,
+          eventDateLabel: savedEvt.dateLabel,
+          venueName: savedEvt.venueName,
+          locality: savedEvt.locality,
+          address: nav.address,
+          lat: nav.lat,
+          lng: nav.lng,
+          routeInstructions: nav.routeInstructions,
+          ticketCode: att.eventTicketCode || `${savedEvt.ticketPrefix}-OFICIAL`,
+          stage: notifyStageForm.stage,
+          noticeMessage: prepared.cleanMessage,
+          addedActivitiesText:
+            notifyStageForm.stage === 'actualizacion_programa'
+              ? notifyStageForm.addedActivitiesText.trim() || undefined
+              : undefined,
+          rescheduledDate:
+            notifyStageForm.stage === 'suspension_clima' && notifyStageForm.rescheduledDate
+              ? savedEvt.dateLabel
+              : undefined,
+          organizationName: att.organizationName,
+          dniNumber: att.dniNumber,
+          phone: att.phone,
+          issuedBy: currentUser?.name || 'Administración Oficial PatagonianC'
+        });
+        sentCount++;
+      }
+
+      setIsNotifyStageModalOpen(false);
+      const stageTitle =
+        notifyStageForm.stage === 'suspension_clima'
+          ? 'Estadio de Suspensión / Reprogramación por Clima Notificado'
+          : 'Estadio de Actualización de Evento y Actividades Notificado';
+
+      showNotice(
+        true,
+        stageTitle,
+        sentCount > 0
+          ? `Se actualizó el estado oficial de "${savedEvt.title}" (${STATUS_LABELS[savedEvt.status]}) y se despachó el comunicado oficial con Mapa, GPS y Pase QR vigente a ${sentCount} inscripto(s).`
+          : `Se actualizó el estado oficial de "${savedEvt.title}" a "${STATUS_LABELS[savedEvt.status]}" en el Calendario de Eventos. Cuando se registren asistentes recibirán este estado actualizado.`
+      );
+    } catch (err: any) {
+      showNotice(
+        false,
+        'Error al emitir notificación del evento',
+        err?.message || 'No se pudo procesar el cambio de estadio del evento.'
+      );
+    } finally {
+      setIsSendingStageNotification(false);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-300">
       {/* ENCABEZADO INSTITUCIONAL DEL MÓDULO EVENTOS */}
@@ -919,16 +1061,41 @@ export default function Events() {
 
           {/* Tabla de Alta Densidad de Registrados y Acreditaciones */}
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
-            <div className="px-5 py-3.5 bg-slate-50 dark:bg-slate-950/60 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-800 dark:text-slate-200">
-                <Lock size={14} className="text-[#006633] dark:text-emerald-400" />
-                <span>
-                  Padrón de Inscriptos en Jornadas ({filteredAttendees.length} registros)
+            <div className="px-5 py-3.5 bg-slate-50 dark:bg-slate-950/60 border-b border-slate-200 dark:border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-800 dark:text-slate-200">
+                  <Lock size={14} className="text-[#006633] dark:text-emerald-400" />
+                  <span>
+                    Padrón de Inscriptos en Jornadas ({filteredAttendees.length} registros)
+                  </span>
+                </div>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
+                  Aprobar envía el Pase QR Oficial + Mapa GPS sin habilitar login al sistema. También podés notificar Actualizaciones o Suspensión por Clima.
                 </span>
               </div>
-              <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                Aprobar envía el Pase QR Oficial + Programa PDF sin habilitar login al sistema.
-              </span>
+
+              {activeSelectedEvent && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openNotifyStageModal(activeSelectedEvent, 'actualizacion_programa')}
+                    className="px-3 py-1.5 rounded-xl bg-sky-50 dark:bg-sky-950/60 hover:bg-sky-100 text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-sky-800 text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition"
+                    title="Notificar nuevas actividades, cambios de horario o modificaciones del evento a los registrados"
+                  >
+                    <RefreshCw size={13} />
+                    <span>Notificar Actualización / Actividades</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openNotifyStageModal(activeSelectedEvent, 'suspension_clima')}
+                    className="px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition"
+                    title="Notificar suspensión o reprogramación preventiva por condiciones climáticas adversas"
+                  >
+                    <CloudRain size={13} />
+                    <span>Suspensión / Reprogramación por Clima</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="overflow-x-auto">
@@ -1362,9 +1529,76 @@ export default function Events() {
                         {evt.description}
                       </p>
                     )}
+
+                    {/* Aviso visible del último Estadio de Notificación Oficial emitido (Actualización o Suspensión por Clima) */}
+                    {(evt.lastNotificationType ||
+                      evt.status === 'actualizado_programa' ||
+                      evt.status === 'suspendido_clima' ||
+                      evt.status === 'reprogramado_clima') && (
+                      <div
+                        className={`rounded-2xl p-3 text-[11px] border space-y-1 ${
+                          evt.lastNotificationType === 'suspension_clima' ||
+                          evt.status === 'suspendido_clima' ||
+                          evt.status === 'reprogramado_clima'
+                            ? 'bg-amber-50/90 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-950 dark:text-amber-200'
+                            : 'bg-sky-50/90 dark:bg-sky-950/40 border-sky-200 dark:border-sky-800 text-sky-950 dark:text-sky-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 font-black uppercase text-[10px]">
+                          <span className="flex items-center gap-1">
+                            {evt.lastNotificationType === 'suspension_clima' ||
+                            evt.status === 'suspendido_clima' ||
+                            evt.status === 'reprogramado_clima' ? (
+                              <>
+                                <CloudRain size={12} />
+                                <span>AVISO CLIMÁTICO: {STATUS_LABELS[evt.status]}</span>
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw size={12} />
+                                <span>EVENTO ACTUALIZADO: NUEVAS ACTIVIDADES</span>
+                              </>
+                            )}
+                          </span>
+                          {evt.lastNotificationSentAt && (
+                            <span className="font-mono text-[9px] opacity-75">
+                              {new Date(evt.lastNotificationSentAt).toLocaleDateString('es-AR')}
+                            </span>
+                          )}
+                        </div>
+                        {evt.lastNotificationMessage && (
+                          <p className="text-[11px] leading-snug line-clamp-2">
+                            {evt.lastNotificationMessage}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                    {/* Botones Oficiales de los 2 Estadios: ACTUALIZACIÓN (Actividades/Modificaciones) y SUSPENSIÓN POR CLIMA */}
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => openNotifyStageModal(evt, 'actualizacion_programa')}
+                        className="px-2.5 py-2 rounded-xl bg-sky-50 dark:bg-sky-950/50 hover:bg-sky-100 text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-sky-800 text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition"
+                        title="Estadio 1: Notificar actualización de actividades, cronograma o modificaciones del evento"
+                      >
+                        <RefreshCw size={12} className="shrink-0" />
+                        <span className="truncate">Actualización</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => openNotifyStageModal(evt, 'suspension_clima')}
+                        className="px-2.5 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition"
+                        title="Estadio 2: Notificar suspensión o reprogramación del evento por condiciones climáticas"
+                      >
+                        <CloudRain size={12} className="shrink-0" />
+                        <span className="truncate">Suspensión Clima</span>
+                      </button>
+                    </div>
+
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
@@ -1620,7 +1854,9 @@ export default function Events() {
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
                   >
                     <option value="inscripcion_abierta">Inscripción Abierta</option>
+                    <option value="actualizado_programa">Actualizado (Nuevas Actividades)</option>
                     <option value="cupo_completo">Cupo Completo</option>
+                    <option value="suspendido_clima">Suspendido por Clima</option>
                     <option value="reprogramado_clima">Reprogramado por Clima</option>
                     <option value="en_curso">En Curso Hoy</option>
                     <option value="finalizado">Jornada Finalizada</option>
@@ -2419,6 +2655,299 @@ export default function Events() {
                 </span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          MODAL OFICIAL DE COMUNICACIÓN DE ESTADIOS DEL EVENTO:
+          1) ACTUALIZACIÓN DE ACTIVIDADES / MODIFICACIONES
+          2) SUSPENSIÓN / REPROGRAMACIÓN POR CONDICIONES CLIMÁTICAS
+         ===================================================================== */}
+      {isNotifyStageModalOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full p-6 space-y-5 shadow-2xl my-8">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3.5">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+                    notifyStageForm.stage === 'suspension_clima'
+                      ? 'bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300'
+                      : 'bg-sky-100 dark:bg-sky-950/70 text-sky-700 dark:text-sky-300'
+                  }`}
+                >
+                  {notifyStageForm.stage === 'suspension_clima' ? (
+                    <CloudRain size={22} />
+                  ) : (
+                    <Megaphone size={22} />
+                  )}
+                </div>
+                <div>
+                  <span className="text-[10px] font-mono font-bold uppercase text-[#006633] dark:text-emerald-400">
+                    COMUNICACIÓN OFICIAL A INSCRIPTOS Y ACREDITADOS • EVENTOS
+                  </span>
+                  <h3 className="text-base sm:text-lg font-black uppercase text-slate-900 dark:text-white">
+                    {notifyStageForm.stage === 'suspension_clima'
+                      ? 'Estadio 2: Notificar Suspensión / Reprogramación por Clima'
+                      : 'Estadio 1: Notificar Actualización de Actividades y Modificaciones'}
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNotifyStageModalOpen(false)}
+                className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSendEventStageNotification} className="space-y-4 text-xs">
+              {/* Selector de Estadio (Actualización vs Suspensión por Clima) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const evt =
+                      fieldEvents.find(ev => ev.id === notifyStageForm.eventId) || fieldEvents[0];
+                    if (evt) openNotifyStageModal(evt, 'actualizacion_programa');
+                  }}
+                  className={`p-3.5 rounded-2xl border text-left transition cursor-pointer flex items-start gap-3 ${
+                    notifyStageForm.stage === 'actualizacion_programa'
+                      ? 'border-2 border-sky-600 bg-sky-50/80 dark:bg-sky-950/40'
+                      : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                  }`}
+                >
+                  <RefreshCw size={18} className="text-sky-600 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-black uppercase text-slate-900 dark:text-white text-xs">
+                      1. Actualización del Evento
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Agregar nuevas actividades técnicas, cambios de horario o actualización de punto de encuentro GPS.
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const evt =
+                      fieldEvents.find(ev => ev.id === notifyStageForm.eventId) || fieldEvents[0];
+                    if (evt) openNotifyStageModal(evt, 'suspension_clima');
+                  }}
+                  className={`p-3.5 rounded-2xl border text-left transition cursor-pointer flex items-start gap-3 ${
+                    notifyStageForm.stage === 'suspension_clima'
+                      ? 'border-2 border-amber-500 bg-amber-50/80 dark:bg-amber-950/40'
+                      : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                  }`}
+                >
+                  <CloudRain size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-black uppercase text-slate-900 dark:text-white text-xs">
+                      2. Suspensión por Clima
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Suspender preventivamente o reprogramar fecha por lluvia, viento o alerta meteorológica.
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                    Evento / Jornada a Notificar *
+                  </label>
+                  <select
+                    value={notifyStageForm.eventId}
+                    onChange={e => {
+                      const nextEvt = fieldEvents.find(ev => ev.id === e.target.value);
+                      if (nextEvt) {
+                        openNotifyStageModal(nextEvt, notifyStageForm.stage);
+                      }
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+                  >
+                    {fieldEvents.map(evt => (
+                      <option key={evt.id} value={evt.id}>
+                        {evt.title} ({evt.date})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                    Destinatarios del Comunicado *
+                  </label>
+                  <select
+                    value={notifyStageForm.targetScope}
+                    onChange={e =>
+                      setNotifyStageForm(p => ({
+                        ...p,
+                        targetScope: e.target.value as 'all_registered' | 'only_accredited'
+                      }))
+                    }
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+                  >
+                    <option value="all_registered">
+                      Todos los Inscriptos y Acreditados del Evento
+                    </option>
+                    <option value="only_accredited">
+                      Solo Asistentes con Acreditación Aprobada (Pase QR Activo)
+                    </option>
+                  </select>
+                </div>
+              </div>
+
+              {notifyStageForm.stage === 'actualizacion_programa' ? (
+                <div className="bg-sky-50/70 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 rounded-2xl p-4 space-y-3">
+                  <div>
+                    <label className="font-black uppercase text-[10px] text-sky-900 dark:text-sky-300 block mb-1">
+                      Nuevas Actividades Agregadas o Modificaciones del Cronograma *
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={notifyStageForm.addedActivitiesText}
+                      onChange={e =>
+                        setNotifyStageForm(p => ({ ...p, addedActivitiesText: e.target.value }))
+                      }
+                      placeholder="Ej: 11:30 hs — Nueva demostración de cosecha y bloque técnico en Parcela Demostrativa..."
+                      className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-800 font-semibold text-slate-900 dark:text-white"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                        Horario de Inicio (Opcional)
+                      </label>
+                      <input
+                        type="time"
+                        value={notifyStageForm.newStartTime}
+                        onChange={e =>
+                          setNotifyStageForm(p => ({ ...p, newStartTime: e.target.value }))
+                        }
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                        Horario de Cierre (Opcional)
+                      </label>
+                      <input
+                        type="time"
+                        value={notifyStageForm.newEndTime}
+                        onChange={e =>
+                          setNotifyStageForm(p => ({ ...p, newEndTime: e.target.value }))
+                        }
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-amber-50/80 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-2xl p-4 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="font-black uppercase text-[10px] text-amber-900 dark:text-amber-300 block mb-1">
+                        Nueva Fecha Reprogramada (Opcional)
+                      </label>
+                      <input
+                        type="date"
+                        value={notifyStageForm.rescheduledDate}
+                        onChange={e =>
+                          setNotifyStageForm(p => ({ ...p, rescheduledDate: e.target.value }))
+                        }
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 font-mono font-bold text-slate-900 dark:text-white"
+                      />
+                      <span className="text-[10px] text-amber-800 dark:text-amber-300 block mt-1">
+                        Si se deja vacío, queda como "Suspendido por Clima (Fecha a confirmar)".
+                      </span>
+                    </div>
+                    <div>
+                      <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                        Horario Inicio
+                      </label>
+                      <input
+                        type="time"
+                        value={notifyStageForm.newStartTime}
+                        onChange={e =>
+                          setNotifyStageForm(p => ({ ...p, newStartTime: e.target.value }))
+                        }
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                        Horario Cierre
+                      </label>
+                      <input
+                        type="time"
+                        value={notifyStageForm.newEndTime}
+                        onChange={e =>
+                          setNotifyStageForm(p => ({ ...p, newEndTime: e.target.value }))
+                        }
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                  Comunicado Oficial que recibirá el Asistente en su Correo *
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={notifyStageForm.noticeMessage}
+                  onChange={e =>
+                    setNotifyStageForm(p => ({ ...p, noticeMessage: e.target.value }))
+                  }
+                  placeholder="Escribí el motivo de la actualización o suspensión climática..."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white font-medium"
+                />
+                <span className="text-[10px] text-slate-400 block mt-1">
+                  El correo incluirá automáticamente este comunicado, el estado de validez del Pase QR y la georreferencia GPS del predio.
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsNotifyStageModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSendingStageNotification}
+                  className={`px-6 py-2.5 rounded-xl text-white text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-md cursor-pointer ${
+                    notifyStageForm.stage === 'suspension_clima'
+                      ? 'bg-amber-600 hover:bg-amber-700'
+                      : 'bg-sky-600 hover:bg-sky-700'
+                  }`}
+                >
+                  {isSendingStageNotification ? (
+                    <Loader2 size={15} className="animate-spin" />
+                  ) : notifyStageForm.stage === 'suspension_clima' ? (
+                    <CloudRain size={15} />
+                  ) : (
+                    <Megaphone size={15} />
+                  )}
+                  <span>
+                    {isSendingStageNotification
+                      ? 'Emitiendo Comunicado...'
+                      : notifyStageForm.stage === 'suspension_clima'
+                        ? 'Confirmar Suspensión / Reprogramación y Notificar'
+                        : 'Confirmar Actualización de Evento y Notificar'}
+                  </span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

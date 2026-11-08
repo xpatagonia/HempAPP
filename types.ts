@@ -183,10 +183,14 @@ export type FieldEventCategory =
 
 export type FieldEventStatus =
   | 'inscripcion_abierta'
+  | 'actualizado_programa'
   | 'cupo_completo'
   | 'reprogramado_clima'
+  | 'suspendido_clima'
   | 'en_curso'
   | 'finalizado';
+
+export type FieldEventNotificationStage = 'actualizacion_programa' | 'suspension_clima';
 
 export interface FieldEventScheduleItem {
   time: string;
@@ -230,6 +234,11 @@ export interface FieldEvent {
   description?: string;
   ticketPrefix: string;
   scheduleItems?: FieldEventScheduleItem[];
+  lastNotificationType?: FieldEventNotificationStage;
+  lastNotificationMessage?: string;
+  lastNotificationSentAt?: string;
+  lastNotificationRecipientsCount?: number;
+  rescheduledDate?: string;
   createdBy?: string;
   createdAt?: string;
 }

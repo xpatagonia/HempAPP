@@ -36,6 +36,8 @@ import {
     parseCoordinateString,
     buildEventGpsNavigationLinks,
     renderSyncEventMapSnapshotDataUrl,
+    sanitizeEventNoticeText,
+    prepareEventNotificationStageByAdmin,
     DEFAULT_FIELD_EVENTS
 } from '../src/services/eventsManagementService.js';
 
@@ -1225,6 +1227,101 @@ test("13.4 Creación de Nuevo Evento con Captación de Campo / Locación Georref
     });
     assert.equal(approvedAttendee.eventAccreditationStatus, 'accredited');
     assert.equal(approvedAttendee.eventId, savedEvent.id);
+});
+
+test("13.5 Dos Estadios Oficiales de Notificación en Eventos: (1) Actualización de Actividades y (2) Suspensión / Reprogramación por Condiciones Climáticas + Blindaje RBAC/Anti-XSS", () => {
+    const adminActor = {
+        id: 'admin-evt-2',
+        name: 'Admin Eventos',
+        email: 'admin@hempc.com.ar',
+        role: 'super_admin' as const
+    };
+
+    const baseEvent = DEFAULT_FIELD_EVENTS[0];
+    const attendee1 = approveEventAttendeeByAdmin({
+        adminUser: adminActor,
+        attendee: createEventRegistrationRecord({
+            name: 'Martín Gómez',
+            email: 'martin.gomez@ejemplo.com.ar',
+            phone: '+5492804112233',
+            dniNumber: '29888777',
+            localityOrProvince: 'Trelew, Chubut',
+            event: baseEvent
+        }),
+        event: baseEvent
+    });
+
+    // 1. Verificar sanitización Anti-XSS de textos de notificación
+    const dirtyNotice = 'Se suma parada técnica <script>alert("xss")</script> javascript:bad() onclick=hack() en Lote 4.';
+    const cleanNotice = sanitizeEventNoticeText(dirtyNotice, 300);
+    assert.ok(!cleanNotice.includes('<') && !cleanNotice.includes('>'), "No debe permitir etiquetas HTML en el comunicado");
+    assert.ok(!cleanNotice.toLowerCase().includes('javascript:'), "No debe permitir javascript: en el comunicado");
+    assert.ok(!cleanNotice.toLowerCase().includes('onclick='), "No debe permitir atributos inline onclick=");
+
+    // 2. Estadio 1: ACTUALIZACIÓN DEL EVENTO (Nuevas Actividades / Modificación Horaria)
+    const stageUpdateResult = prepareEventNotificationStageByAdmin({
+        adminUser: adminActor,
+        event: baseEvent,
+        allEvents: DEFAULT_FIELD_EVENTS,
+        allUsers: [attendee1],
+        stage: 'actualizacion_programa',
+        noticeMessage: 'Se incorpora una demostración de maquinaria de cosecha y ajuste de horario de cierre.',
+        addedActivitiesText: '13:15 hs — Demostración dinámica en Lote Experimental Norte',
+        newStartTime: '08:30',
+        newEndTime: '16:00'
+    });
+
+    assert.equal(stageUpdateResult.updatedEvent.status, 'actualizado_programa', "El evento debe pasar al estado 'actualizado_programa'");
+    assert.equal(stageUpdateResult.updatedEvent.lastNotificationType, 'actualizacion_programa');
+    assert.equal(stageUpdateResult.updatedEvent.endTime, '16:00');
+    assert.ok(stageUpdateResult.updatedEvent.dateLabel.includes('16:00'), "El dateLabel debe recalcularse automáticamente al cambiar el horario");
+    assert.ok(
+        stageUpdateResult.updatedEvent.scheduleItems?.some(item => item.description.includes('Demostración dinámica')),
+        "La nueva actividad debe agregarse a la lista de actividades del evento"
+    );
+    assert.equal(stageUpdateResult.targetAttendees.length, 1, "Debe identificar al asistente registrado para ese evento");
+
+    // 3. Estadio 2: SUSPENSIÓN / REPROGRAMACIÓN POR CONDICIONES CLIMÁTICAS
+    const stageWeatherSuspend = prepareEventNotificationStageByAdmin({
+        adminUser: adminActor,
+        event: stageUpdateResult.updatedEvent,
+        allEvents: DEFAULT_FIELD_EVENTS,
+        allUsers: [attendee1],
+        stage: 'suspension_clima',
+        noticeMessage: 'Por alerta meteorológica de vientos intensos y lluvias en el VIRCH, se reprograma la jornada.',
+        rescheduledDate: '2026-11-28',
+        newStartTime: '09:00',
+        newEndTime: '15:30'
+    });
+
+    assert.equal(stageWeatherSuspend.updatedEvent.status, 'reprogramado_clima', "Con nueva fecha definida debe pasar a 'reprogramado_clima'");
+    assert.equal(stageWeatherSuspend.updatedEvent.lastNotificationType, 'suspension_clima');
+    assert.equal(stageWeatherSuspend.updatedEvent.date, '2026-11-28');
+    assert.equal(stageWeatherSuspend.updatedEvent.rescheduledDate, '2026-11-28');
+    assert.ok(stageWeatherSuspend.updatedEvent.weatherWarning?.includes('AVISO CLIMÁTICO OFICIAL'));
+
+    // Si no se indica nueva fecha aún, debe quedar en 'suspendido_clima'
+    const stageWeatherNoDate = prepareEventNotificationStageByAdmin({
+        adminUser: adminActor,
+        event: baseEvent,
+        allEvents: DEFAULT_FIELD_EVENTS,
+        allUsers: [attendee1],
+        stage: 'suspension_clima',
+        noticeMessage: 'Suspendido preventivamente por temporal de lluvia en chacra.'
+    });
+    assert.equal(stageWeatherNoDate.updatedEvent.status, 'suspendido_clima', "Sin nueva fecha aún debe pasar a 'suspendido_clima'");
+
+    // 4. Blindaje RBAC: un usuario no administrador o visitante de evento jamás puede disparar cambios de estadio
+    assert.throws(() => {
+        prepareEventNotificationStageByAdmin({
+            adminUser: { id: 'v-1', name: 'Visitante', email: 'v@test.com', role: 'viewer', accessScope: 'event_attendee' },
+            event: baseEvent,
+            allEvents: DEFAULT_FIELD_EVENTS,
+            allUsers: [attendee1],
+            stage: 'suspension_clima',
+            noticeMessage: 'Intento no autorizado'
+        });
+    }, /Solo los Administradores/);
 });
 
 console.log("\n=================================================");
