@@ -207,7 +207,7 @@ export default function Login() {
       const svgEl = document.getElementById("accredited-pass-qr-svg");
       const [qrDataUrl, mapSnapshotUrl] = await Promise.all([
         svgElementToPngDataUrl(svgEl, 360),
-        captureEventRouteMapSnapshotDataUrl(activeEventForPass, "satellite")
+        captureEventRouteMapSnapshotDataUrl(activeEventForPass, "street")
       ]);
       downloadEventAccreditationPassPDF(
         activeEventForPass,
@@ -920,7 +920,7 @@ export default function Login() {
                     const svgEl = document.getElementById("accredited-pass-qr-svg");
                     const [qrDataUrl, mapSnapshotUrl] = await Promise.all([
                       svgElementToPngDataUrl(svgEl, 360),
-                      captureEventRouteMapSnapshotDataUrl(activeEventForPass, "satellite")
+                      captureEventRouteMapSnapshotDataUrl(activeEventForPass, "street")
                     ]);
                     downloadEventAccreditationPassPDF(
                       activeEventForPass,

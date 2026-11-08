@@ -957,7 +957,7 @@ test("12.3 Ciclo Completo de Acreditación: Captura de Mapa, Instructivo Paso a 
     assert.equal(gpsLinks.lng, -65.289033);
     assert.ok(gpsLinks.decimalLabel.includes("-43.308362"));
     assert.ok(gpsLinks.dmsLabel.includes("S") && gpsLinks.dmsLabel.includes("W"));
-    assert.ok(gpsLinks.staticMapImageUrl.includes("-65.289033,-43.308362"));
+    assert.ok(gpsLinks.staticMapImageUrl.includes("World_Street_Map/MapServer/export?bbox="));
     assert.equal(gpsLinks.routeSteps.length, 3, "El instructivo de cómo llegar debe incluir los 3 tramos viales georreferenciados");
     assert.ok(gpsLinks.routeSteps[0].title.includes("Tramo 1"));
     assert.ok(gpsLinks.routeSteps[1].title.includes("Tramo 2"));

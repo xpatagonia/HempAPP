@@ -37,7 +37,7 @@ export default function EventRouteMapPreview({
   compact = false
 }: EventRouteMapPreviewProps) {
   const [copiedCoords, setCopiedCoords] = useState(false);
-  const [mapMode, setMapMode] = useState<'satellite' | 'street'>('satellite');
+  const [mapMode, setMapMode] = useState<'satellite' | 'street'>('street');
   const [capturedSnapshotUrl, setCapturedSnapshotUrl] = useState<string | undefined>(() =>
     renderSyncEventMapSnapshotDataUrl(event)
   );
@@ -76,13 +76,13 @@ export default function EventRouteMapPreview({
       ? event.routeWaypoints
       : [
           {
-            lat: Number((nav.lat + 0.014).toFixed(6)),
-            lng: Number((nav.lng - 0.014).toFixed(6)),
-            label: '1. Acceso Ruta Principal'
+            lat: Number((nav.lat + 0.024).toFixed(6)),
+            lng: Number((nav.lng - 0.018).toFixed(6)),
+            label: `1. Referencia Urbana / Ruta Principal (${event.locality || 'Ciudad'})`
           },
           {
-            lat: Number((nav.lat + 0.004).toFixed(6)),
-            lng: Number((nav.lng - 0.005).toFixed(6)),
+            lat: Number((nav.lat + 0.006).toFixed(6)),
+            lng: Number((nav.lng - 0.007).toFixed(6)),
             label: `2. Desvío Señalizado (${nav.address})`
           },
           {
@@ -93,6 +93,10 @@ export default function EventRouteMapPreview({
         ];
 
   const polylinePositions: [number, number][] = waypoints.map(wp => [wp.lat, wp.lng]);
+  const mapCenterLat =
+    (Math.min(...waypoints.map(w => w.lat)) + Math.max(...waypoints.map(w => w.lat))) / 2;
+  const mapCenterLng =
+    (Math.min(...waypoints.map(w => w.lng)) + Math.max(...waypoints.map(w => w.lng))) / 2;
 
   const handleCopyCoords = () => {
     navigator.clipboard.writeText(nav.decimalLabel);
@@ -137,26 +141,15 @@ export default function EventRouteMapPreview({
           </div>
           <div>
             <span className="text-[10px] font-mono font-black uppercase tracking-wider text-[#006633] dark:text-emerald-400 block">
-              MAPA DE LOCACIÓN, CAPTURA DE RUTA E INSTRUCTIVO DE CÓMO LLEGAR
+              MAPA REGIONAL CON REFERENCIAS, CAPTURA DE RUTA E INSTRUCTIVO DE CÓMO LLEGAR
             </span>
             <h4 className="text-xs font-black uppercase text-slate-900 dark:text-white">
-              {event.venueName || 'Establecimiento Oficial'} • {event.locality || 'VIRCH – Chubut'}
+              {event.venueName || 'Establecimiento Oficial'} • Referencia: {event.locality || 'VIRCH – Chubut'}
             </h4>
           </div>
         </div>
 
         <div className="flex items-center gap-1 bg-slate-200/70 dark:bg-slate-800 p-1 rounded-xl text-[10px] font-bold">
-          <button
-            type="button"
-            onClick={() => setMapMode('satellite')}
-            className={`px-2.5 py-1 rounded-lg uppercase cursor-pointer transition ${
-              mapMode === 'satellite'
-                ? 'bg-[#006633] text-white'
-                : 'text-slate-600 dark:text-slate-300'
-            }`}
-          >
-            Satélite + Ruta
-          </button>
           <button
             type="button"
             onClick={() => setMapMode('street')}
@@ -166,25 +159,41 @@ export default function EventRouteMapPreview({
                 : 'text-slate-600 dark:text-slate-300'
             }`}
           >
-            Mapa Vial
+            Mapa Vial Claro (Con Referencias)
+          </button>
+          <button
+            type="button"
+            onClick={() => setMapMode('satellite')}
+            className={`px-2.5 py-1 rounded-lg uppercase cursor-pointer transition ${
+              mapMode === 'satellite'
+                ? 'bg-[#006633] text-white'
+                : 'text-slate-600 dark:text-slate-300'
+            }`}
+          >
+            Vista Satélite
           </button>
         </div>
       </div>
 
-      {/* Mapa Interactivo con Ruta Destacada */}
+      {/* Mapa Interactivo con Vista Regional Alejada (Zoom 12) para ver Ciudad + Rutas + Establecimiento */}
       <div
         className={`relative w-full ${
-          compact ? 'h-48' : 'h-60'
-        } rounded-xl overflow-hidden border border-slate-300 dark:border-slate-700 z-0`}
+          compact ? 'h-52' : 'h-64'
+        } rounded-xl overflow-hidden border border-slate-300 dark:border-slate-700 bg-slate-100 z-0`}
       >
         <MapContainer
-          key={`${nav.lat}-${nav.lng}-${mapMode}`}
-          center={[nav.lat, nav.lng]}
-          zoom={14}
+          key={`${mapCenterLat}-${mapCenterLng}-${mapMode}`}
+          center={[mapCenterLat, mapCenterLng]}
+          zoom={12}
           scrollWheelZoom={false}
           style={{ height: '100%', width: '100%' }}
         >
-          {mapMode === 'satellite' ? (
+          {mapMode === 'street' ? (
+            <TileLayer
+              attribution="&copy; OpenStreetMap / Esri"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+            />
+          ) : (
             <>
               <TileLayer
                 attribution="Esri World Imagery"
@@ -194,24 +203,24 @@ export default function EventRouteMapPreview({
                 url="https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
               />
             </>
-          ) : (
-            <TileLayer
-              attribution="&copy; OpenStreetMap"
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
           )}
 
-          {/* Polilínea Exterior de Contraste */}
+          {/* Polilínea Exterior Blanca para contraste sobre mapa claro */}
           <Polyline
             positions={polylinePositions}
-            pathOptions={{ color: '#0c2d1e', weight: 8, opacity: 0.85 }}
+            pathOptions={{ color: '#ffffff', weight: 10, opacity: 0.95 }}
+          />
+          {/* Polilínea Intermedia Verde Institucional */}
+          <Polyline
+            positions={polylinePositions}
+            pathOptions={{ color: '#006633', weight: 6, opacity: 0.95 }}
           />
           {/* Polilínea Principal: RUTA DESTACADA */}
           <Polyline
             positions={polylinePositions}
             pathOptions={{
               color: '#DDDB00',
-              weight: 4,
+              weight: 3.5,
               opacity: 1,
               dashArray: '8, 6'
             }}
@@ -224,18 +233,18 @@ export default function EventRouteMapPreview({
               <CircleMarker
                 key={`${wp.lat}-${wp.lng}-${idx}`}
                 center={[wp.lat, wp.lng]}
-                radius={isDestination ? 10 : 6}
+                radius={isDestination ? 10 : 7}
                 pathOptions={{
-                  color: isDestination ? '#DDDB00' : '#ffffff',
-                  weight: isDestination ? 3 : 2,
-                  fillColor: isDestination ? '#006633' : idx === 0 ? '#0284c7' : '#f59e0b',
+                  color: '#ffffff',
+                  weight: 3,
+                  fillColor: isDestination ? '#006633' : idx === 0 ? '#0284c7' : '#d97706',
                   fillOpacity: 1
                 }}
               >
                 <Tooltip
-                  direction="top"
-                  offset={[0, -8]}
-                  permanent={isDestination}
+                  direction={idx === 1 ? 'bottom' : 'top'}
+                  offset={[0, idx === 1 ? 8 : -8]}
+                  permanent={isDestination || idx === 0}
                 >
                   <span className="font-mono text-[10px] font-bold">
                     {wp.label || (isDestination ? 'Tranquera de Acreditación' : `Hito Vial ${idx + 1}`)}
@@ -290,20 +299,20 @@ export default function EventRouteMapPreview({
           </div>
         </div>
 
-        {/* Vista Previa de la Captura Cartográfica Oficial que se adjunta al Instructivo */}
+        {/* Vista Previa de la Captura Cartográfica Oficial CLARA que se adjunta al Instructivo */}
         {showSnapshotPreview && capturedSnapshotUrl && (
-          <div className="rounded-xl overflow-hidden border-2 border-[#006633]/50 bg-slate-950 space-y-2 p-2">
+          <div className="rounded-xl overflow-hidden border-2 border-[#006633] bg-white space-y-2 p-2.5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-              <span className="text-[10px] font-mono font-black uppercase text-[#DDDB00] flex items-center gap-1.5">
-                <Camera size={12} />
-                <span>Captura Oficial del Mapa Incorporada al Instructivo de Cómo Llegar</span>
+              <span className="text-[10px] font-mono font-black uppercase text-[#006633] flex items-center gap-1.5">
+                <Camera size={13} />
+                <span>Captura Vial Regional Clara (Con Referencia de Ciudad y Rutas)</span>
               </span>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   disabled={isCapturing}
                   onClick={handleDownloadMapPng}
-                  className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-bold uppercase flex items-center gap-1 cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-[10px] font-bold uppercase flex items-center gap-1 cursor-pointer"
                 >
                   <Download size={11} />
                   <span>Guardar PNG</span>
@@ -312,7 +321,7 @@ export default function EventRouteMapPreview({
                   type="button"
                   disabled={isCapturing}
                   onClick={handleDownloadHowToArrivePdf}
-                  className="px-2.5 py-1 rounded-lg bg-[#DDDB00] hover:bg-yellow-300 text-[#0c2d1e] text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg bg-[#006633] hover:bg-[#004d26] text-white text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer"
                 >
                   {isCapturing ? <Loader2 size={11} className="animate-spin" /> : <FileText size={11} />}
                   <span>Instructivo PDF</span>
@@ -321,8 +330,8 @@ export default function EventRouteMapPreview({
             </div>
             <img
               src={capturedSnapshotUrl}
-              alt={`Captura del mapa de cómo llegar a ${event.venueName || 'la sede'}`}
-              className="w-full h-auto rounded-lg border border-slate-800 block"
+              alt={`Captura del mapa regional de cómo llegar a ${event.venueName || 'la sede'}`}
+              className="w-full h-auto rounded-lg border border-slate-200 bg-slate-50 block"
             />
           </div>
         )}

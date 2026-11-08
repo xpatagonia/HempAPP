@@ -2081,7 +2081,7 @@ export default function Events() {
                       const svgEl = document.getElementById('events-admin-qr-svg');
                       const [qrPng, mapSnap] = await Promise.all([
                         svgElementToPngDataUrl(svgEl, 420),
-                        captureEventRouteMapSnapshotDataUrl(qrModalTarget.event, 'satellite')
+                        captureEventRouteMapSnapshotDataUrl(qrModalTarget.event, 'street')
                       ]);
                       downloadEventAccreditationPassPDF(
                         qrModalTarget.event,

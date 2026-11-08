@@ -236,17 +236,17 @@ export function buildEnabledEstablishmentsOptions(
         ? establishmentName
         : `${establishmentName} — ${fieldName}`;
 
-    const defaultRoute = `Ruta Destacada hacia ${venueName}: Tomar vía principal hacia ${address} (${cityProv}). Ingresar por acceso principal del establecimiento hasta el Puesto de Control y Acreditación QR (GPS: ${validLat.toFixed(6)}, ${validLng.toFixed(6)}).`;
+    const defaultRoute = `Ruta Destacada hacia ${venueName}: Partiendo desde el casco urbano / rotonda principal de ${cityProv}, tomar la vía troncal hacia ${address} y seguir la señalización vial hasta la Tranquera de Acreditación QR (GPS: ${validLat.toFixed(6)}, ${validLng.toFixed(6)}).`;
 
     const approachPoint = {
-      lat: Number((validLat + 0.015).toFixed(6)),
-      lng: Number((validLng - 0.015).toFixed(6)),
-      label: `Acceso Vial Principal (${loc.city || 'Ruta'})`
+      lat: Number((validLat + 0.024).toFixed(6)),
+      lng: Number((validLng - 0.018).toFixed(6)),
+      label: `Referencia Urbana / Ruta Principal (${loc.city || 'Acceso'})`
     };
     const turnPoint = {
-      lat: Number((validLat + 0.004).toFixed(6)),
-      lng: Number((validLng - 0.005).toFixed(6)),
-      label: `Desvío Señalizado • ${address}`
+      lat: Number((validLat + 0.006).toFixed(6)),
+      lng: Number((validLng - 0.007).toFixed(6)),
+      label: `Desvío Vial Señalizado • ${address}`
     };
     const gatePoint = {
       lat: validLat,
@@ -422,18 +422,69 @@ export interface EventGpsNavigationBundle {
 }
 
 /**
- * Construye una URL pública de captura estática satelital/híbrida con marcador en las coordenadas del evento,
- * ideal para clientes de correo electrónico (Gmail, Outlook, iOS Mail) y vistas previas rápidas.
+ * Calcula el encuadre geográfico regional (bounding box ampliado ~12x8 km)
+ * para que en el mapa se visualicen con claridad la ciudad de referencia, las rutas nacionales/provinciales
+ * y el recorrido completo hasta la tranquera del establecimiento.
+ */
+export function computeRegionalMapBbox(
+  lat: number,
+  lng: number,
+  waypoints?: { lat: number; lng: number }[]
+): {
+  minLng: number;
+  minLat: number;
+  maxLng: number;
+  maxLat: number;
+  centerLat: number;
+  centerLng: number;
+  bboxString: string;
+} {
+  const pts =
+    waypoints && waypoints.length >= 2
+      ? waypoints
+      : [
+          { lat: lat + 0.024, lng: lng - 0.018 },
+          { lat, lng }
+        ];
+  const lats = pts.map(p => p.lat);
+  const lngs = pts.map(p => p.lng);
+  const midLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+  const midLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+
+  // Amplitud regional suficientemente alejada (~14 km ancho x ~8.5 km alto) para mostrar ciudad cabecera y rutas
+  const halfSpanLng = Math.max(0.075, (Math.max(...lngs) - Math.min(...lngs)) * 1.45);
+  const halfSpanLat = Math.max(0.042, (Math.max(...lats) - Math.min(...lats)) * 1.45);
+
+  const minLng = Number((midLng - halfSpanLng).toFixed(6));
+  const maxLng = Number((midLng + halfSpanLng).toFixed(6));
+  const minLat = Number((midLat - halfSpanLat).toFixed(6));
+  const maxLat = Number((midLat + halfSpanLat).toFixed(6));
+
+  return {
+    minLng,
+    minLat,
+    maxLng,
+    maxLat,
+    centerLat: Number(midLat.toFixed(6)),
+    centerLng: Number(midLng.toFixed(6)),
+    bboxString: `${minLng},${minLat},${maxLng},${maxLat}`
+  };
+}
+
+/**
+ * Construye una URL pública de captura cartográfica VIAL CLARA y ALEJADA (Esri World_Street_Map PNG)
+ * que muestra las ciudades vecinas (ej. Trelew), las Rutas Nacionales/Provinciales (RN 3, RP 7, RN 25)
+ * y el entorno del establecimiento con máxima nitidez para correos electrónicos y PDF.
  */
 export function buildStaticEventMapImageUrl(
   lat: number,
   lng: number,
-  zoom = 14
+  _zoom = 12
 ): string {
   const safeLat = Number(lat.toFixed(6));
   const safeLng = Number(lng.toFixed(6));
-  // Captura híbrida satelital + red vial con marcador destacado en destino
-  return `https://static-maps.yandex.ru/1.x/?ll=${safeLng},${safeLat}&z=${zoom}&l=sat,skl&size=650,320&pt=${safeLng},${safeLat},pm2gnl`;
+  const { bboxString } = computeRegionalMapBbox(safeLat, safeLng);
+  return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/export?bbox=${bboxString}&bboxSR=4326&imageSR=4326&size=900,480&format=png&f=image`;
 }
 
 /**
@@ -1257,15 +1308,16 @@ function latLngToTileXY(lat: number, lng: number, zoom: number): { x: number; y:
 }
 
 /**
- * Dibuja la base cartográfica (terreno satelital + parcelas + red vial + rosa de los vientos + Ruta Destacada)
- * sobre un contexto Canvas 2D y superpone las etiquetas de hitos y telemetría GPS.
+ * Dibuja la base cartográfica DIURNA Y CLARA (con referencias regionales de ciudad, rutas troncales,
+ * valle irrigado, escala ampliada y Ruta Destacada) sobre un contexto Canvas 2D.
+ * Nunca utiliza fondos negros ni oscuros para garantizar legibilidad total en impresión, PDF y pantallas móviles.
  */
 function paintCartographicOverlayOnCanvas(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
   event: Partial<FieldEvent>,
-  hasRealTiles: boolean
+  hasRealMapImage: boolean
 ): void {
   const nav = buildEventGpsNavigationLinks(event);
   const venueName = event.venueName || DEFAULT_FIELD_EVENTS[0].venueName;
@@ -1276,13 +1328,13 @@ function paintCartographicOverlayOnCanvas(
       ? event.routeWaypoints
       : [
           {
-            lat: Number((nav.lat + 0.014).toFixed(6)),
-            lng: Number((nav.lng - 0.014).toFixed(6)),
-            label: '1. Acceso Ruta Principal'
+            lat: Number((nav.lat + 0.024).toFixed(6)),
+            lng: Number((nav.lng - 0.018).toFixed(6)),
+            label: `1. Referencia Urbana / Ruta Principal (${locality})`
           },
           {
-            lat: Number((nav.lat + 0.004).toFixed(6)),
-            lng: Number((nav.lng - 0.005).toFixed(6)),
+            lat: Number((nav.lat + 0.006).toFixed(6)),
+            lng: Number((nav.lng - 0.007).toFixed(6)),
             label: `2. Desvío Señalizado (${nav.address})`
           },
           {
@@ -1292,83 +1344,119 @@ function paintCartographicOverlayOnCanvas(
           }
         ];
 
-  if (!hasRealTiles) {
-    // Base satelital vectorial de alto contraste (cuando se genera offline o sin teselas remotas)
+  const bbox = computeRegionalMapBbox(nav.lat, nav.lng, waypoints);
+
+  if (!hasRealMapImage) {
+    // Base cartográfica VIAL CLARA DIURNA (estilo plano rutero de alta legibilidad, NUNCA negro)
     const bgGrad = ctx.createLinearGradient(0, 0, width, height);
-    bgGrad.addColorStop(0, '#0a2318');
-    bgGrad.addColorStop(0.55, '#123524');
-    bgGrad.addColorStop(1, '#0d291c');
+    bgGrad.addColorStop(0, '#f8fafc');
+    bgGrad.addColorStop(0.5, '#f1f5f9');
+    bgGrad.addColorStop(1, '#e8f5e9');
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, width, height);
 
-    // Cuadros parcelarios agrícolas simulados del valle irrigado
+    // Valle irrigado / zona rural verde suave en la franja media-inferior
+    ctx.fillStyle = 'rgba(187, 247, 208, 0.45)';
+    ctx.beginPath();
+    ctx.moveTo(0, height * 0.42);
+    ctx.lineTo(width, height * 0.28);
+    ctx.lineTo(width, height);
+    ctx.lineTo(0, height);
+    ctx.closePath();
+    ctx.fill();
+
+    // Cuadros de chacras / lotes rurales suaves
     const parcels = [
-      { x: 40, y: 70, w: 190, h: 110, fill: 'rgba(16, 185, 129, 0.10)' },
-      { x: 245, y: 65, w: 220, h: 125, fill: 'rgba(5, 150, 105, 0.14)' },
-      { x: 480, y: 75, w: 240, h: 140, fill: 'rgba(221, 219, 0, 0.08)' },
-      { x: 80, y: 210, w: 210, h: 150, fill: 'rgba(16, 185, 129, 0.08)' },
-      { x: 315, y: 215, w: 250, h: 155, fill: 'rgba(34, 197, 94, 0.15)' },
-      { x: 585, y: 230, w: 260, h: 145, fill: 'rgba(16, 185, 129, 0.12)' }
+      { x: 60, y: 210, w: 200, h: 115 },
+      { x: 275, y: 195, w: 230, h: 130 },
+      { x: 520, y: 180, w: 250, h: 145 },
+      { x: 140, y: 335, w: 240, h: 95 },
+      { x: 400, y: 335, w: 280, h: 95 }
     ];
     parcels.forEach(p => {
-      ctx.fillStyle = p.fill;
-      ctx.strokeStyle = 'rgba(110, 231, 183, 0.22)';
-      ctx.lineWidth = 1.2;
+      ctx.fillStyle = 'rgba(134, 239, 172, 0.25)';
+      ctx.strokeStyle = 'rgba(22, 163, 74, 0.28)';
+      ctx.lineWidth = 1;
       ctx.fillRect(p.x, p.y, p.w, p.h);
       ctx.strokeRect(p.x, p.y, p.w, p.h);
     });
 
-    // Grilla geodésica fina
-    ctx.strokeStyle = 'rgba(148, 163, 184, 0.14)';
+    // Curso hidrográfico de referencia (Río / Canal Principal del Valle)
+    ctx.strokeStyle = '#7dd3fc';
+    ctx.lineWidth = 10;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, height * 0.52);
+    ctx.bezierCurveTo(width * 0.35, height * 0.44, width * 0.65, height * 0.58, width, height * 0.46);
+    ctx.stroke();
+
+    // Mancha urbana de referencia (Ciudad Cabecera al Norte/Noroeste)
+    ctx.fillStyle = 'rgba(226, 232, 240, 0.9)';
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(70, 58, 250, 92, 12);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#334155';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`REFERENCIA URBANA: ${locality.toUpperCase()}`, 195, 86);
+    ctx.font = '11px sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.fillText('Casco Urbano y Nudo Vial de Acceso', 195, 106);
+
+    // Grilla cartográfica clara
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.28)';
     ctx.lineWidth = 1;
-    for (let gx = 60; gx < width; gx += 80) {
+    for (let gx = 80; gx < width; gx += 100) {
       ctx.beginPath();
       ctx.moveTo(gx, 48);
-      ctx.lineTo(gx, height - 54);
+      ctx.lineTo(gx, height - 48);
       ctx.stroke();
     }
-    for (let gy = 80; gy < height - 54; gy += 65) {
+    for (let gy = 90; gy < height - 48; gy += 75) {
       ctx.beginPath();
       ctx.moveTo(0, gy);
       ctx.lineTo(width, gy);
       ctx.stroke();
     }
 
-    // Traza vial secundaria de referencia
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
-    ctx.lineWidth = 6;
+    // Rutas Nacionales y Provinciales de Referencia (amarillo/ámbar vial claro)
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 7;
     ctx.beginPath();
-    ctx.moveTo(0, height * 0.78);
-    ctx.lineTo(width, height * 0.28);
+    ctx.moveTo(195, 48);
+    ctx.lineTo(440, height - 48);
     ctx.stroke();
-  } else {
-    // Sutil viñeta oscura para resaltar etiquetas sobre la imagen satelital real
-    const vignette = ctx.createLinearGradient(0, 0, 0, height);
-    vignette.addColorStop(0, 'rgba(12, 45, 30, 0.45)');
-    vignette.addColorStop(0.2, 'rgba(12, 45, 30, 0.08)');
-    vignette.addColorStop(0.8, 'rgba(12, 45, 30, 0.12)');
-    vignette.addColorStop(1, 'rgba(12, 45, 30, 0.65)');
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, width, height);
+
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(0, 130);
+    ctx.lineTo(width, 230);
+    ctx.stroke();
   }
 
-  // Proyección de los waypoints al lienzo (centrado en el punto medio del recorrido)
-  const zoom = 14;
-  const lats = waypoints.map(w => w.lat);
-  const lngs = waypoints.map(w => w.lng);
-  const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
-  const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-  const centerTile = latLngToTileXY(centerLat, centerLng, zoom);
-
+  // Proyección geográfica exacta dentro del BBox regional ampliado (con márgenes seguros para etiquetas)
   const projectPoint = (lat: number, lng: number, idx: number, total: number) => {
-    const ptTile = latLngToTileXY(lat, lng, zoom);
-    let px = width / 2 + (ptTile.x - centerTile.x) * 256;
-    let py = height / 2 + (ptTile.y - centerTile.y) * 256;
-    // Garantizar que todos los hitos queden bien distribuidos y visibles dentro del encuadre
-    if (px < 110 || px > width - 110 || py < 95 || py > height - 95) {
+    const normX = (lng - bbox.minLng) / (bbox.maxLng - bbox.minLng || 0.1);
+    const normY = (bbox.maxLat - lat) / (bbox.maxLat - bbox.minLat || 0.1);
+    let px = normX * width;
+    let py = normY * height;
+
+    // Si los puntos están muy próximos o fuera del margen útil, distribuirlos armónicamente manteniendo orientación
+    if (
+      px < 130 ||
+      px > width - 130 ||
+      py < 95 ||
+      py > height - 95 ||
+      !hasRealMapImage
+    ) {
       const ratio = total > 1 ? idx / (total - 1) : 1;
-      px = 155 + ratio * (width - 330);
-      py = height - 125 - ratio * (height - 255);
+      px = 210 + ratio * (width - 420);
+      py = 135 + ratio * (height - 255);
     }
     return { x: px, y: py };
   };
@@ -1378,21 +1466,21 @@ function paintCartographicOverlayOnCanvas(
     label:
       wp.label ||
       (idx === 0
-        ? '1. Acceso Ruta Principal'
+        ? `1. Referencia Ruta Principal (${locality})`
         : idx === waypoints.length - 1
           ? `3. TRANQUERA QR • ${venueName}`
-          : `2. Desvío Señalizado`),
+          : `2. Desvío Vial Señalizado`),
     lat: wp.lat,
     lng: wp.lng,
     isDestination: idx === waypoints.length - 1
   }));
 
-  // 1. Sombra exterior de la Polilínea de Ruta Destacada
+  // 1. Halo exterior blanco para despegar la ruta sobre cualquier mapa vial o satelital
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.strokeStyle = '#0c2d1e';
-  ctx.lineWidth = 14;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.lineWidth = 16;
   ctx.beginPath();
   screenPoints.forEach((pt, i) => {
     if (i === 0) ctx.moveTo(pt.x, pt.y);
@@ -1400,27 +1488,26 @@ function paintCartographicOverlayOnCanvas(
   });
   ctx.stroke();
 
-  // 2. Línea continua verde esmeralda intermedia
+  // 2. Línea continua verde institucional (#006633) de alto contraste
   ctx.strokeStyle = '#006633';
-  ctx.lineWidth = 9;
+  ctx.lineWidth = 10;
   ctx.stroke();
 
-  // 3. Trazo punteado amarillo lima oficial (#DDDB00) de RUTA DESTACADA
+  // 3. Trazo interior punteado amarillo/dorado (#DDDB00) indicando RUTA DESTACADA
   ctx.strokeStyle = '#DDDB00';
   ctx.lineWidth = 4.5;
   ctx.setLineDash([12, 8]);
   ctx.stroke();
   ctx.restore();
 
-  // 4. Nodos numerados y etiquetas de Hitos del Instructivo
+  // 4. Nodos numerados y etiquetas blancas de alta legibilidad para cada Hito Vial
   screenPoints.forEach((pt, idx) => {
-    const radius = pt.isDestination ? 16 : 12;
+    const radius = pt.isDestination ? 17 : 13;
 
-    // Halo exterior en destino
     if (pt.isDestination) {
       ctx.beginPath();
-      ctx.arc(pt.x, pt.y, 25, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(221, 219, 0, 0.28)';
+      ctx.arc(pt.x, pt.y, 28, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0, 102, 51, 0.22)';
       ctx.fill();
     }
 
@@ -1428,42 +1515,46 @@ function paintCartographicOverlayOnCanvas(
     ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
     ctx.fillStyle = pt.isDestination ? '#006633' : idx === 0 ? '#0284c7' : '#d97706';
     ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = pt.isDestination ? '#DDDB00' : '#ffffff';
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = '#ffffff';
     ctx.stroke();
 
-    // Número de hito dentro del círculo
+    // Número del hito
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 12px sans-serif';
+    ctx.font = 'bold 13px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(String(idx + 1), pt.x, pt.y);
 
-    // Cartel flotante de referencia del hito
-    const badgeText = `${idx + 1}. ${pt.label.replace(/^[0-9]+\.\s*/, '').slice(0, 38)}`;
+    // Etiqueta clara con fondo blanco/marfil y borde de color para lectura perfecta
+    const cleanLabel = pt.label.replace(/^[0-9]+\.\s*/, '').slice(0, 42);
+    const badgeText = `${idx + 1}. ${cleanLabel}`;
     ctx.font = 'bold 12px sans-serif';
     const textWidth = ctx.measureText(badgeText).width;
-    const boxW = textWidth + 20;
-    const boxH = 26;
-    const boxX = Math.min(Math.max(16, pt.x - boxW / 2), width - boxW - 16);
-    const boxY = pt.isDestination ? Math.max(58, pt.y - 46) : Math.min(height - 88, pt.y + 18);
+    const boxW = textWidth + 22;
+    const boxH = 28;
 
-    ctx.fillStyle = pt.isDestination ? '#0c2d1e' : 'rgba(15, 23, 42, 0.88)';
-    ctx.strokeStyle = pt.isDestination ? '#DDDB00' : '#38bdf8';
-    ctx.lineWidth = 1.8;
+    // Posicionar las etiquetas alternando arriba/abajo para que nunca se superpongan
+    const offsetY = idx === 0 ? -44 : idx === 1 ? 20 : -48;
+    const boxX = Math.min(Math.max(14, pt.x - boxW / 2), width - boxW - 14);
+    const boxY = Math.min(Math.max(54, pt.y + offsetY), height - 86);
+
+    ctx.fillStyle = pt.isDestination ? '#006633' : 'rgba(255, 255, 255, 0.96)';
+    ctx.strokeStyle = pt.isDestination ? '#DDDB00' : idx === 0 ? '#0284c7' : '#d97706';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.roundRect(boxX, boxY, boxW, boxH, 6);
+    ctx.roundRect(boxX, boxY, boxW, boxH, 7);
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = pt.isDestination ? '#DDDB00' : '#f8fafc';
+    ctx.fillStyle = pt.isDestination ? '#ffffff' : '#0f172a';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(badgeText, boxX + 10, boxY + boxH / 2);
+    ctx.fillText(badgeText, boxX + 11, boxY + boxH / 2);
   });
 
   // 5. Franja Superior Institucional de la Captura
-  ctx.fillStyle = 'rgba(12, 45, 30, 0.94)';
+  ctx.fillStyle = '#0c2d1e';
   ctx.fillRect(0, 0, width, 46);
   ctx.fillStyle = '#DDDB00';
   ctx.fillRect(0, 46, width, 3);
@@ -1471,50 +1562,53 @@ function paintCartographicOverlayOnCanvas(
   ctx.fillStyle = '#DDDB00';
   ctx.font = 'bold 11px monospace';
   ctx.textAlign = 'left';
-  ctx.fillText('CAPTURA CARTOGRÁFICA OFICIAL • RUTA DESTACADA E INSTRUCTIVO DE CÓMO LLEGAR', 16, 17);
+  ctx.fillText(
+    'MAPA REGIONAL DE ACCESO (VISTA AMPLIADA CON REFERENCIAS VIALES) • CÓMO LLEGAR',
+    16,
+    17
+  );
 
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 14px sans-serif';
-  ctx.fillText(`${venueName} — ${locality}`.slice(0, 72), 16, 35);
+  ctx.fillText(`${venueName} — Referencia: ${locality}`.slice(0, 74), 16, 35);
 
-  // Rosa de los vientos Norte arriba a la derecha
-  const compassX = width - 42;
-  const compassY = 82;
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-  ctx.strokeStyle = '#DDDB00';
-  ctx.lineWidth = 1.5;
+  // Rosa de los vientos y Escala Regional arriba a la derecha
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.strokeStyle = '#006633';
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(compassX, compassY, 20, 0, Math.PI * 2);
+  ctx.roundRect(width - 175, 58, 160, 32, 8);
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = '#DDDB00';
-  ctx.font = 'bold 12px sans-serif';
+
+  ctx.fillStyle = '#006633';
+  ctx.font = 'bold 11px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('N ▲', compassX, compassY + 1);
+  ctx.fillText('🧭 NORTE ▲  |  Escala: ~2,5 km', width - 95, 74);
 
   // 6. Franja Inferior de Telemetría GPS y Dirección Vial
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
+  ctx.fillStyle = '#0f172a';
   ctx.fillRect(0, height - 48, width, 48);
   ctx.fillStyle = '#10b981';
-  ctx.fillRect(0, height - 48, width, 2);
+  ctx.fillRect(0, height - 48, width, 2.5);
 
   ctx.fillStyle = '#DDDB00';
   ctx.font = 'bold 12px monospace';
   ctx.textAlign = 'left';
   ctx.fillText(
-    `GPS DECIMAL: ${nav.decimalLabel}   |   GMS: ${nav.dmsLabel}`,
+    `DESTINO GPS DECIMAL: ${nav.decimalLabel}   |   GMS: ${nav.dmsLabel}`,
     16,
     height - 28
   );
 
-  ctx.fillStyle = '#e2e8f0';
+  ctx.fillStyle = '#f8fafc';
   ctx.font = '12px sans-serif';
-  ctx.fillText(`Dirección / Acceso: ${nav.address}`.slice(0, 95), 16, height - 11);
+  ctx.fillText(`Referencia Vial y Acceso: ${nav.address} (${locality})`.slice(0, 95), 16, height - 11);
 }
 
 /**
- * Genera de manera sincrónica una captura cartográfica en formato DataURL PNG (900x480)
- * con la Ruta Destacada, hitos numerados y telemetría GPS lista para incrustar en PDF o UI.
+ * Genera de manera sincrónica una captura cartográfica VIAL CLARA en formato DataURL PNG (900x480)
+ * con referencias regionales, la Ruta Destacada, hitos numerados y telemetría GPS.
  */
 export function renderSyncEventMapSnapshotDataUrl(
   event?: Partial<FieldEvent> | null
@@ -1536,14 +1630,13 @@ export function renderSyncEventMapSnapshotDataUrl(
 }
 
 /**
- * Captura en alta resolución (900x480 PNG) el mapa real del evento (descargando las teselas
- * satelitales de Esri World Imagery o viales de OpenStreetMap con CORS anónimo y superponiendo
- * la Ruta Destacada, los hitos viales y las coordenadas GPS). Si no hay red o CORS bloquea,
- * utiliza automáticamente el renderizador cartográfico vectorial de respaldo.
+ * Captura en alta resolución (900x480 PNG) el mapa regional ALEJADO Y CLARO del evento
+ * (descargando el mapa vial/topográfico regional de Esri World_Street_Map con ciudades, rutas RN3/RP7
+ * y referencias, o World_Imagery si se elige satélite, y superponiendo la Ruta Destacada y los 3 Hitos).
  */
 export async function captureEventRouteMapSnapshotDataUrl(
   event?: Partial<FieldEvent> | null,
-  mode: 'satellite' | 'street' = 'satellite'
+  mode: 'satellite' | 'street' = 'street'
 ): Promise<string | undefined> {
   if (typeof document === 'undefined') return undefined;
   const targetEvent = event || DEFAULT_FIELD_EVENTS[0];
@@ -1558,69 +1651,44 @@ export async function captureEventRouteMapSnapshotDataUrl(
     const ctx = canvas.getContext('2d');
     if (!ctx) return undefined;
 
-    const zoom = 14;
     const waypoints =
       targetEvent.routeWaypoints && targetEvent.routeWaypoints.length >= 2
         ? targetEvent.routeWaypoints
-        : [{ lat: nav.lat, lng: nav.lng }];
-    const lats = waypoints.map(w => w.lat);
-    const lngs = waypoints.map(w => w.lng);
-    const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
-    const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-    const centerTile = latLngToTileXY(centerLat, centerLng, zoom);
+        : [
+            { lat: nav.lat + 0.024, lng: nav.lng - 0.018 },
+            { lat: nav.lat, lng: nav.lng }
+          ];
 
-    const baseTileX = Math.floor(centerTile.x);
-    const baseTileY = Math.floor(centerTile.y);
-    const offsetX = width / 2 - (centerTile.x - baseTileX) * 256;
-    const offsetY = height / 2 - (centerTile.y - baseTileY) * 256;
+    const bbox = computeRegionalMapBbox(nav.lat, nav.lng, waypoints);
+    const serviceName = mode === 'satellite' ? 'World_Imagery' : 'World_Street_Map';
+    const exportUrl = `https://server.arcgisonline.com/ArcGIS/rest/services/${serviceName}/MapServer/export?bbox=${bbox.bboxString}&bboxSR=4326&imageSR=4326&size=${width},${height}&format=png&f=image`;
 
-    const loadTile = (url: string): Promise<HTMLImageElement | null> =>
-      new Promise(resolve => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        const timer = setTimeout(() => resolve(null), 2200);
-        img.onload = () => {
-          clearTimeout(timer);
-          resolve(img);
-        };
-        img.onerror = () => {
-          clearTimeout(timer);
-          resolve(null);
-        };
-        img.src = url;
-      });
-
-    const tileJobs: Promise<{ img: HTMLImageElement | null; dx: number; dy: number }>[] = [];
-    for (let dx = -2; dx <= 2; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        const tx = baseTileX + dx;
-        const ty = baseTileY + dy;
-        const tileUrl =
-          mode === 'satellite'
-            ? `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${ty}/${tx}`
-            : `https://tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`;
-        tileJobs.push(
-          loadTile(tileUrl).then(img => ({
-            img,
-            dx: offsetX + dx * 256,
-            dy: offsetY + dy * 256
-          }))
-        );
-      }
-    }
-
-    const loadedTiles = await Promise.all(tileJobs);
-    let drawnCount = 0;
-    loadedTiles.forEach(t => {
-      if (t.img) {
-        try {
-          ctx.drawImage(t.img, t.dx, t.dy, 256, 256);
-          drawnCount++;
-        } catch {}
-      }
+    const loadedMapImg = await new Promise<HTMLImageElement | null>(resolve => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      const timer = setTimeout(() => resolve(null), 3200);
+      img.onload = () => {
+        clearTimeout(timer);
+        resolve(img);
+      };
+      img.onerror = () => {
+        clearTimeout(timer);
+        resolve(null);
+      };
+      img.src = exportUrl;
     });
 
-    paintCartographicOverlayOnCanvas(ctx, width, height, targetEvent, drawnCount >= 4);
+    let drawnRealMap = false;
+    if (loadedMapImg) {
+      try {
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(loadedMapImg, 0, 0, width, height);
+        drawnRealMap = true;
+      } catch {}
+    }
+
+    paintCartographicOverlayOnCanvas(ctx, width, height, targetEvent, drawnRealMap);
     return canvas.toDataURL('image/png');
   } catch {
     return renderSyncEventMapSnapshotDataUrl(targetEvent);
@@ -1628,11 +1696,11 @@ export async function captureEventRouteMapSnapshotDataUrl(
 }
 
 /**
- * Descarga directamente la captura del mapa con la Ruta Destacada y Coordenadas GPS como imagen PNG.
+ * Descarga directamente la captura del mapa regional claro con la Ruta Destacada y Coordenadas GPS como imagen PNG.
  */
 export async function downloadEventMapSnapshotPNG(
   event?: Partial<FieldEvent> | null,
-  mode: 'satellite' | 'street' = 'satellite'
+  mode: 'satellite' | 'street' = 'street'
 ): Promise<void> {
   if (typeof window === 'undefined') return;
   const targetEvent = event || DEFAULT_FIELD_EVENTS[0];
@@ -1702,7 +1770,7 @@ export function renderHowToArriveInstructivoPageOnDoc(
   );
 
   // 2. CAPTURA DEL MAPA CON LA RUTA DESTACADA (186 mm x 94 mm)
-  doc.setFillColor(15, 23, 42);
+  doc.setFillColor(248, 250, 252);
   doc.setDrawColor(0, 102, 51);
   doc.setLineWidth(0.8);
   doc.roundedRect(12, 45, 186, 96, 3, 3, 'FD');
@@ -1859,7 +1927,7 @@ export async function downloadEventHowToArriveGuidePDF(
 ): Promise<void> {
   const mapDataUrl =
     preCapturedMapDataUrl ||
-    (await captureEventRouteMapSnapshotDataUrl(event, 'satellite')) ||
+    (await captureEventRouteMapSnapshotDataUrl(event, 'street')) ||
     renderSyncEventMapSnapshotDataUrl(event);
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -2025,7 +2093,7 @@ export function downloadEventAccreditationPassPDF(
   );
 
   // Miniatura de la Captura del Mapa en Página 1 (x=16..84, y=153..200)
-  doc.setFillColor(15, 38, 28);
+  doc.setFillColor(248, 250, 252);
   doc.setDrawColor(16, 185, 129);
   doc.setLineWidth(0.4);
   doc.roundedRect(16, 153, 68, 47, 2.5, 2.5, 'FD');
