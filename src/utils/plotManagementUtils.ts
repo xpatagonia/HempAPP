@@ -101,7 +101,10 @@ export function computeDifferentialSeedStockAdjustment(params: {
     : undefined;
 
   const oldUsageKg = editingPlot
-    ? convertSeedMassToKg(editingPlot.usedSeedValue, editingPlot.usedSeedUnit || 'kg')
+    ? convertSeedMassToKg(
+        editingPlot.usedSeedValue !== undefined ? editingPlot.usedSeedValue : editingPlot.usedSeedQuantity,
+        editingPlot.usedSeedValue !== undefined ? (editingPlot.usedSeedUnit || 'kg') : 'kg'
+      )
     : 0;
 
   const isSameBatch = Boolean(

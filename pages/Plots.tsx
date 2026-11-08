@@ -114,7 +114,7 @@ export default function Plots() {
     viewer: 'Auditor / Consultor Agrónomo'
   };
 
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<'table' | 'gallery' | 'map'>('gallery');
   const [searchTerm, setSearchTerm] = useState('');
@@ -235,12 +235,18 @@ export default function Plots() {
           rowDistance: target.rowDistance || 20,
           density: target.density || 48,
           perimeter: target.perimeter || 12,
+          usedSeedValue: target.usedSeedValue !== undefined ? target.usedSeedValue : Number(target.usedSeedQuantity || 0),
+          usedSeedUnit: target.usedSeedValue !== undefined ? (target.usedSeedUnit || 'kg') : 'kg',
           technicalResponsibleMatricula: target.technicalResponsibleMatricula || 'MP CIAFBA 14.892'
         });
         setIsAddModalOpen(true);
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete('editPlotId');
+        nextParams.delete('tab');
+        setSearchParams(nextParams, { replace: true });
       }
     }
-  }, [searchParams, plots, locations, currentUser, clients, projects]);
+  }, [searchParams, setSearchParams, plots, locations, currentUser, clients, projects]);
 
   const getEstablishmentDefaults = (locId?: string) => {
     const idStr = String(locId || '');
@@ -263,13 +269,14 @@ export default function Plots() {
   const resetForm = () => {
     const defaultLoc = filterLoc !== 'all' ? locations.find(l => l.id === filterLoc) : locations[0];
     const defs = getEstablishmentDefaults(defaultLoc?.id);
+    const defaultBatch = seedBatches.find(b => (!b.materialType || b.materialType === 'seed') && b.isActive && b.remainingQuantity > 0.0001);
     setFormData({ 
       name: '',
       type: 'Ensayo',
       locationId: defaultLoc?.id || '',
       projectId: projects[0]?.id || '',
-      varietyId: '',
-      seedBatchId: '', 
+      varietyId: defaultBatch?.varietyId || varieties[0]?.id || '',
+      seedBatchId: defaultBatch?.id || '', 
       status: 'Activa',
       campaign: selectedCampaign === 'all' ? '2025/2026' : selectedCampaign,
       activeCampaigns: [selectedCampaign === 'all' ? '2025/2026' : selectedCampaign],
@@ -535,10 +542,19 @@ export default function Plots() {
     }
 
     const sanitizedName = sanitizePlotInputText(formData.name, 80).toUpperCase();
-    if (!sanitizedName || !formData.locationId || !formData.varietyId) {
+    if (!sanitizedName || !formData.locationId) {
+      setEditModalTab('agronomic');
       setFormFeedback({
         type: 'error',
-        message: 'Complete los campos obligatorios: Identificador de Parcela, Establecimiento Padre y Variedad Genética.'
+        message: 'Complete los campos obligatorios en la Pestaña 1: Identificador de Parcela y Establecimiento Padre.'
+      });
+      return;
+    }
+    if (!formData.varietyId) {
+      setEditModalTab('traceability');
+      setFormFeedback({
+        type: 'error',
+        message: 'Seleccione una Variedad Genética / Lote de Semilla en la Pestaña 2 (Semilla INASE & Responsables).'
       });
       return;
     }
@@ -636,6 +652,7 @@ export default function Plots() {
         perimeter: finalPerimeter,
         usedSeedValue: Math.max(0, Number(formData.usedSeedValue || 0)),
         usedSeedUnit: formData.usedSeedUnit || 'kg',
+        usedSeedQuantity: Number(calculatedUsedKg.toFixed(6)),
         campaign: assignedCampaign,
         activeCampaigns: campaignsList,
         coordinates,
@@ -810,6 +827,8 @@ export default function Plots() {
       rowDistance: plot.rowDistance || 20,
       density: plot.density || 48,
       perimeter: plot.perimeter || 12,
+      usedSeedValue: plot.usedSeedValue !== undefined ? plot.usedSeedValue : Number(plot.usedSeedQuantity || 0),
+      usedSeedUnit: plot.usedSeedValue !== undefined ? (plot.usedSeedUnit || 'kg') : 'kg',
       technicalResponsibleMatricula: plot.technicalResponsibleMatricula || 'MP CIAFBA 14.892'
     });
     setIsAddModalOpen(true);
@@ -1800,7 +1819,7 @@ export default function Plots() {
               </div>
 
               {/* CUERPO DEL FORMULARIO CON PESTAÑAS HORIZONTALES */}
-              <form onSubmit={handleSubmitAdd} className="flex-1 flex flex-col overflow-hidden">
+              <form onSubmit={handleSubmitAdd} noValidate className="flex-1 flex flex-col overflow-hidden">
                 <div className="flex-1 overflow-y-auto p-5 sm:p-6">
                   
                   {/* ====================================================================

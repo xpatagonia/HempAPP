@@ -1050,14 +1050,14 @@ test("13.2 Ajuste Diferencial de Stock de Semilla INASE en Edición y Generació
     assert.equal(createDiff.oldBatchId, undefined);
     assert.equal(createDiff.newSelectedBatchRemainingKg, 85);
 
-    // 2. Edición de la misma parcela cambiando de 15 kg a 20 kg (solo debe descontar la diferencia de +5 kg, nunca 20 kg de nuevo)
+    // 2. Edición de la misma parcela cambiando de 15 kg a 20 kg (incluyendo fallback legacy usedSeedQuantity cuando usedSeedValue es undefined)
     const editSameBatchDiff = computeDifferentialSeedStockAdjustment({
         editingPlot: {
             ...DEMO_PLOTS[0],
             seedBatchId: sampleBatch.id,
             usedSeedQuantity: 15,
-            usedSeedValue: 15,
-            usedSeedUnit: 'kg'
+            usedSeedValue: undefined,
+            usedSeedUnit: undefined
         },
         nextSeedBatchId: sampleBatch.id,
         nextUsedKg: 20,
@@ -1068,7 +1068,29 @@ test("13.2 Ajuste Diferencial de Stock de Semilla INASE en Edición y Generació
     assert.equal(editSameBatchDiff.newSelectedBatchRemainingKg, 95);
     assert.equal(editSameBatchDiff.oldBatchId, undefined);
 
-    // 3. Generación geodésica de polígono de 1 ha en Trelew (-43.308362, -65.289033)
+    // 3. Cambio de lote de semilla: debe restaurar los 15 kg al lote anterior y descontar del nuevo
+    if (DEMO_SEED_BATCHES.length > 1) {
+        const secondBatch = { ...DEMO_SEED_BATCHES[1], remainingQuantity: 50 };
+        const switchBatches = [sampleBatch, secondBatch, ...DEMO_SEED_BATCHES.slice(2)];
+        const switchDiff = computeDifferentialSeedStockAdjustment({
+            editingPlot: {
+                ...DEMO_PLOTS[0],
+                seedBatchId: sampleBatch.id,
+                usedSeedQuantity: 15,
+                usedSeedValue: 15,
+                usedSeedUnit: 'kg'
+            },
+            nextSeedBatchId: secondBatch.id,
+            nextUsedKg: 10,
+            seedBatches: switchBatches
+        });
+        assert.equal(switchDiff.isValid, true);
+        assert.equal(switchDiff.oldBatchId, sampleBatch.id);
+        assert.equal(switchDiff.restoredOldBatchRemainingKg, 115, "Debe restaurar los 15 kg al lote anterior");
+        assert.equal(switchDiff.newSelectedBatchRemainingKg, 40, "Debe descontar 10 kg del nuevo lote");
+    }
+
+    // 4. Generación geodésica de polígono de 1 ha en Trelew (-43.308362, -65.289033)
     const polyResult = generateGeodesicPolygonFromSurface(-43.308362, -65.289033, 1, 'ha');
     assert.equal(polyResult.polygon.length, 4, "El polígono generado debe tener 4 vértices geodésicos");
     assert.equal(polyResult.areaM2, 10000, "1 ha equivale a 10.000 m²");

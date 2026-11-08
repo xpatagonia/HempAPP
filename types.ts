@@ -492,6 +492,7 @@ export interface Plot {
   soilType?: string;
   usedSeedValue?: number;
   usedSeedUnit?: 'gr' | 'kg' | 'tn';
+  usedSeedQuantity?: number;
   color?: string; // Nuevo campo para el color de referencia
   campaign?: string; // Campaña agrícola asignada (ej: '2025/2026')
   activeCampaigns?: string[];
