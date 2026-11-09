@@ -246,7 +246,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         ...(!isSupplierUser ? [{ to: '/finances', icon: DollarSign, label: 'Costos & Finanzas' }] : []),
         { to: '/analytics', icon: BarChart3, label: 'Comparativa Genética' },
         { to: '/integrity', icon: ShieldAlert, label: 'Integridad & Licencias' },
-        ...(!isClient && !isSupplierUser ? [{ to: '/users', icon: UserCheck, label: 'Admin & Accesos' }] : []),
+        ...(isAdminUser ? [{ to: '/users', icon: UserCheck, label: 'Admin & Accesos' }] : []),
         ...(isAdminUser
           ? [{
               to: '/events',
@@ -460,11 +460,13 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
                 className="px-2.5 py-1 rounded-lg bg-white/90 text-slate-900 text-[11px] font-mono font-bold border border-slate-950/20 outline-none cursor-pointer"
                 title="Cambiar usuario simulado"
               >
-                {systemUsers.map(u => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} ({u.role}) — {u.organizationName || 'Red Central'}
-                  </option>
-                ))}
+                {systemUsers
+                  .filter(u => u.accountStatus !== 'pending_approval' && u.accountStatus !== 'rejected')
+                  .map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.role}) — {u.organizationName || 'Red Central'}
+                    </option>
+                  ))}
               </select>
               <button
                 type="button"

@@ -108,13 +108,94 @@ export const SUPPLIER_ACTOR_ROLES: { value: SupplierActorRole; label: string; sh
   description: SUPPLIER_ACTOR_ROLES_INFO[key].description
 }));
 
+export const USER_META_MARKER_START = '<!--HEMPC_USER_META:';
+export const USER_META_MARKER_END = ':END_USER_META-->';
+
+/**
+ * Desempaqueta metadatos extendidos de usuario almacenados dentro de `job_title` en Supabase (`public.users`).
+ */
+export function unpackUserMetaFromPersistence(rawJobTitle?: string | null): {
+  cleanJobTitle: string;
+  parsedMeta: Partial<User>;
+} {
+  const str = String(rawJobTitle || '');
+  const match = str.match(/<!--HEMPC_USER_META:(.*?)(?::END_USER_META)?-->/s);
+  if (match && match[1]) {
+    const cleanJobTitle = str.replace(/\s*<!--HEMPC_USER_META:.*?(?::END_USER_META)?-->/s, '').trim();
+    try {
+      const parsed = JSON.parse(match[1]);
+      if (parsed && typeof parsed === 'object') {
+        return { cleanJobTitle, parsedMeta: parsed };
+      }
+    } catch {}
+    return { cleanJobTitle, parsedMeta: {} };
+  }
+  return { cleanJobTitle: str.trim(), parsedMeta: {} };
+}
+
+/**
+ * Empaqueta todos los atributos de rol, aislamiento multi-tenant, semillero y estado de cuenta
+ * dentro de `job_title` para persistencia 100% íntegra en Supabase (`public.users`).
+ */
+export function packUserMetaForPersistence(u: User): string {
+  const { cleanJobTitle } = unpackUserMetaFromPersistence(u.jobTitle);
+  const meta: Partial<User> = {};
+  if (u.accessScope) meta.accessScope = u.accessScope;
+  if (u.accountStatus) meta.accountStatus = u.accountStatus;
+  if (u.registrationSource) meta.registrationSource = u.registrationSource;
+  if (u.requestedProfileType) meta.requestedProfileType = u.requestedProfileType;
+  if (u.structureRole) meta.structureRole = u.structureRole;
+  if (u.supplierId) meta.supplierId = u.supplierId;
+  if (u.supplierActorRole) meta.supplierActorRole = u.supplierActorRole;
+  if (u.memberType) meta.memberType = u.memberType;
+  if (u.assignedPlotIds && u.assignedPlotIds.length > 0) meta.assignedPlotIds = u.assignedPlotIds;
+  if (u.eventRegistered !== undefined) meta.eventRegistered = u.eventRegistered;
+  if (u.eventId) meta.eventId = u.eventId;
+  if (u.eventName) meta.eventName = u.eventName;
+  if (u.eventTicketCode) meta.eventTicketCode = u.eventTicketCode;
+  if (u.eventConfirmedByEmail !== undefined) meta.eventConfirmedByEmail = u.eventConfirmedByEmail;
+  if (u.eventProgramDownloaded !== undefined) meta.eventProgramDownloaded = u.eventProgramDownloaded;
+  if (u.eventAccreditationStatus) meta.eventAccreditationStatus = u.eventAccreditationStatus;
+  if (u.eventCheckedInAt) meta.eventCheckedInAt = u.eventCheckedInAt;
+  if (u.eventCheckedInBy) meta.eventCheckedInBy = u.eventCheckedInBy;
+  if (u.eventCertificateIssuedAt) meta.eventCertificateIssuedAt = u.eventCertificateIssuedAt;
+  if (u.localityOrProvince) meta.localityOrProvince = u.localityOrProvince;
+  if (u.estimatedHectares !== undefined) meta.estimatedHectares = u.estimatedHectares;
+  if (u.organizationName) meta.organizationName = u.organizationName;
+  if (u.approvedBy) meta.approvedBy = u.approvedBy;
+  if (u.approvedAt) meta.approvedAt = u.approvedAt;
+  if (u.activationToken) meta.activationToken = u.activationToken;
+  if (u.passwordPendingSetup !== undefined) meta.passwordPendingSetup = u.passwordPendingSetup;
+  if (u.dniNumber) meta.dniNumber = u.dniNumber;
+  if (u.dniVerified !== undefined) meta.dniVerified = u.dniVerified;
+  if (u.dniUpdatedAt) meta.dniUpdatedAt = u.dniUpdatedAt;
+  if (Object.keys(meta).length === 0) return cleanJobTitle;
+  return `${cleanJobTitle} ${USER_META_MARKER_START}${JSON.stringify(meta)}${USER_META_MARKER_END}`.trim();
+}
+
+/**
+ * Verifica si un registro de usuario está bloqueado por ser visitante de evento o solicitud pendiente/rechazada.
+ */
+export function isBlockedOrNonSystemUser(user: User | null | undefined): boolean {
+  if (!user) return true;
+  if (user.accountStatus === 'pending_approval' || user.accountStatus === 'rejected') return true;
+  if (user.accessScope === 'event_attendee') return true;
+  if (user.passwordPendingSetup === true) return true;
+  const pwd = String(user.password || '');
+  if (pwd.startsWith('__PENDING_') || pwd.startsWith('__EVENT_VISITOR_')) return true;
+  if (user.eventRegistered && !user.isNetworkMember && user.role === 'viewer' && !user.clientId && !user.supplierId) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * Determina si el usuario actual es un Administrador o Supervisor de la Cooperativa Central.
  * Los administradores de la cooperativa (sin clientId ni supplierId asignado) son los ÚNICOS con acceso
  * de gestión irrestricto a todas las estructuras, campos y parcelas de la red.
  */
 export function isCentralAdminOrSupervisor(user: User | null): boolean {
-  if (!user) return false;
+  if (!user || isBlockedOrNonSystemUser(user)) return false;
   if (user.role === 'super_admin' || user.role === 'admin') return true;
   return false;
 }
@@ -123,8 +204,9 @@ export function isCentralAdminOrSupervisor(user: User | null): boolean {
  * Determina si el usuario pertenece a un Proveedor / Semillero Homologado con acceso restringido a sus semillas/insumos.
  */
 export function isSupplierRestrictedUser(user: User | null): boolean {
-  if (!user) return false;
+  if (!user || isBlockedOrNonSystemUser(user)) return false;
   if (isCentralAdminOrSupervisor(user)) return false;
+  if (user.memberType === 'Proveedor_Homologado') return true;
   return Boolean(user.supplierId && String(user.supplierId).trim().length > 0 && !user.clientId);
 }
 
@@ -132,14 +214,43 @@ export function isSupplierRestrictedUser(user: User | null): boolean {
  * Determina si un usuario tiene alcance de lectura global (Admin Central o Auditor Externo sin establecimiento ni proveedor fijo).
  */
 export function hasGlobalReadScope(user: User | null): boolean {
-  if (!user) return false;
+  if (!user || isBlockedOrNonSystemUser(user)) return false;
   if (isCentralAdminOrSupervisor(user)) return true;
   if (isSupplierRestrictedUser(user)) return false;
-  // Los visores/auditores externos sin clientId ni supplierId ni parcelas restringidas pueden auditar en modo solo lectura
-  if (user.role === 'viewer' && !user.clientId && !user.supplierId && (!user.assignedPlotIds || user.assignedPlotIds.length === 0)) {
+  // Los visores/auditores externos activos del sistema sin clientId ni supplierId ni parcelas restringidas pueden auditar en modo solo lectura
+  if (
+    user.role === 'viewer' &&
+    user.accessScope !== 'event_attendee' &&
+    !user.eventRegistered &&
+    !user.clientId &&
+    !user.supplierId &&
+    (!user.assignedPlotIds || user.assignedPlotIds.length === 0)
+  ) {
     return true;
   }
   return false;
+}
+
+/**
+ * Verifica si un usuario autenticado tiene permiso para acceder a una ruta específica de la aplicación.
+ */
+export function canAccessRoute(user: User | null, routePath: string): boolean {
+  if (!user || isBlockedOrNonSystemUser(user)) return false;
+  const cleanPath = String(routePath || '/').split('?')[0].trim().toLowerCase();
+
+  if (cleanPath.startsWith('/settings')) {
+    return user.role === 'super_admin';
+  }
+  if (cleanPath.startsWith('/users') || cleanPath.startsWith('/events')) {
+    return isCentralAdminOrSupervisor(user);
+  }
+  if (cleanPath.startsWith('/finances') || cleanPath.startsWith('/clients')) {
+    return !isSupplierRestrictedUser(user);
+  }
+  if (cleanPath.startsWith('/suppliers')) {
+    return user.role !== 'client';
+  }
+  return true;
 }
 
 /**

@@ -21,8 +21,11 @@ import {
   canAccessSeedBatch,
   canAccessTask,
   hasGlobalReadScope,
+  isBlockedOrNonSystemUser,
   isCentralAdminOrSupervisor,
   isSupplierRestrictedUser,
+  packUserMetaForPersistence,
+  unpackUserMetaFromPersistence,
   resolveLocationStructureRoster
 } from '../src/utils/structurePermissions';
 
@@ -295,48 +298,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const USER_META_MARKER_END = ':END_USER_META-->';
 
     const unpackUserMetaFromJobTitle = (rawJobTitle?: string | null): { cleanJobTitle: string; parsedMeta: Partial<User> } => {
-        const str = String(rawJobTitle || '');
-        const match = str.match(/<!--HEMPC_USER_META:(.*?)(?::END_USER_META)?-->/s);
-        if (match && match[1]) {
-            const cleanJobTitle = str.replace(/\s*<!--HEMPC_USER_META:.*?(?::END_USER_META)?-->/s, '').trim();
-            try {
-                const parsed = JSON.parse(match[1]);
-                if (parsed && typeof parsed === 'object') {
-                    return { cleanJobTitle, parsedMeta: parsed };
-                }
-            } catch {}
-            return { cleanJobTitle, parsedMeta: {} };
-        }
-        return { cleanJobTitle: str.trim(), parsedMeta: {} };
+        return unpackUserMetaFromPersistence(rawJobTitle);
     };
 
     const packUserMetaIntoJobTitle = (u: User): string => {
-        const { cleanJobTitle } = unpackUserMetaFromJobTitle(u.jobTitle);
-        const meta: Partial<User> = {};
-        if (u.accessScope) meta.accessScope = u.accessScope;
-        if (u.accountStatus) meta.accountStatus = u.accountStatus;
-        if (u.registrationSource) meta.registrationSource = u.registrationSource;
-        if (u.requestedProfileType) meta.requestedProfileType = u.requestedProfileType;
-        if (u.eventRegistered !== undefined) meta.eventRegistered = u.eventRegistered;
-        if (u.eventId) meta.eventId = u.eventId;
-        if (u.eventName) meta.eventName = u.eventName;
-        if (u.eventTicketCode) meta.eventTicketCode = u.eventTicketCode;
-        if (u.eventConfirmedByEmail !== undefined) meta.eventConfirmedByEmail = u.eventConfirmedByEmail;
-        if (u.eventProgramDownloaded !== undefined) meta.eventProgramDownloaded = u.eventProgramDownloaded;
-        if (u.eventAccreditationStatus) meta.eventAccreditationStatus = u.eventAccreditationStatus;
-        if (u.eventCheckedInAt) meta.eventCheckedInAt = u.eventCheckedInAt;
-        if (u.eventCheckedInBy) meta.eventCheckedInBy = u.eventCheckedInBy;
-        if (u.eventCertificateIssuedAt) meta.eventCertificateIssuedAt = u.eventCertificateIssuedAt;
-        if (u.localityOrProvince) meta.localityOrProvince = u.localityOrProvince;
-        if (u.estimatedHectares !== undefined) meta.estimatedHectares = u.estimatedHectares;
-        if (u.organizationName) meta.organizationName = u.organizationName;
-        if (u.approvedBy) meta.approvedBy = u.approvedBy;
-        if (u.approvedAt) meta.approvedAt = u.approvedAt;
-        if (u.activationToken) meta.activationToken = u.activationToken;
-        if (u.passwordPendingSetup !== undefined) meta.passwordPendingSetup = u.passwordPendingSetup;
-        if (u.dniNumber) meta.dniNumber = u.dniNumber;
-        if (Object.keys(meta).length === 0) return cleanJobTitle;
-        return `${cleanJobTitle} ${USER_META_MARKER_START}${JSON.stringify(meta)}${USER_META_MARKER_END}`.trim();
+        return packUserMetaForPersistence(u);
     };
 
     const healSingleUser = (u: User): User => {
@@ -371,25 +337,65 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 : u.passwordPendingSetup !== undefined
                 ? u.passwordPendingSetup
                 : savedUserMeta.passwordPendingSetup;
+
+        // Corrección canónica para Joaquin AREZO (Encargado CAP Puerto Madryn):
+        // En el padrón oficial es technician/encargado (mientras Salvador MERELLE es client/propietario).
+        const isJoaquinArezo =
+            String(u.id) === '1766471712087' ||
+            String(u.email || '').trim().toLowerCase() === 'joaquin@hempc.com.ar';
+        const resolvedRole = isJoaquinArezo && (!u.role || u.role === 'client')
+            ? 'technician'
+            : (u.role || mergedMeta.role || demoMatch?.role || 'viewer');
+        const resolvedStructureRole =
+            parsedMeta.structureRole ||
+            u.structureRole ||
+            mergedMeta.structureRole ||
+            demoMatch?.structureRole ||
+            (isJoaquinArezo ? 'encargado' : undefined);
+        const resolvedSupplierId =
+            parsedMeta.supplierId !== undefined
+                ? parsedMeta.supplierId
+                : u.supplierId !== undefined
+                ? u.supplierId
+                : mergedMeta.supplierId !== undefined
+                ? mergedMeta.supplierId
+                : demoMatch?.supplierId;
+        const resolvedSupplierActorRole =
+            parsedMeta.supplierActorRole ||
+            u.supplierActorRole ||
+            mergedMeta.supplierActorRole ||
+            demoMatch?.supplierActorRole;
+        const resolvedMemberType =
+            parsedMeta.memberType ||
+            u.memberType ||
+            mergedMeta.memberType ||
+            demoMatch?.memberType;
+        const resolvedAssignedPlotIds =
+            parsedMeta.assignedPlotIds ||
+            u.assignedPlotIds ||
+            mergedMeta.assignedPlotIds ||
+            demoMatch?.assignedPlotIds;
+
         return {
             ...(demoMatch || {}),
             ...mergedMeta,
             ...u,
             jobTitle: cleanJobTitle || mergedMeta.jobTitle || demoMatch?.jobTitle,
             accessScope: parsedMeta.accessScope || u.accessScope || mergedMeta.accessScope,
-            role: u.role || mergedMeta.role || demoMatch?.role || 'viewer',
-            structureRole: u.structureRole || mergedMeta.structureRole || demoMatch?.structureRole,
-            supplierId: u.supplierId !== undefined ? u.supplierId : (mergedMeta.supplierId !== undefined ? mergedMeta.supplierId : demoMatch?.supplierId),
-            supplierActorRole: u.supplierActorRole || mergedMeta.supplierActorRole || demoMatch?.supplierActorRole,
-            memberType: u.memberType || mergedMeta.memberType || demoMatch?.memberType,
-            organizationName: u.organizationName || mergedMeta.organizationName || demoMatch?.organizationName,
+            role: resolvedRole,
+            structureRole: resolvedStructureRole,
+            supplierId: resolvedSupplierId,
+            supplierActorRole: resolvedSupplierActorRole,
+            memberType: resolvedMemberType,
+            assignedPlotIds: resolvedAssignedPlotIds,
+            organizationName: parsedMeta.organizationName || u.organizationName || mergedMeta.organizationName || demoMatch?.organizationName,
             clientId: u.clientId !== undefined ? u.clientId : (mergedMeta.clientId !== undefined ? mergedMeta.clientId : demoMatch?.clientId),
             isNetworkMember: u.isNetworkMember !== undefined ? u.isNetworkMember : (mergedMeta.isNetworkMember ?? demoMatch?.isNetworkMember ?? false),
-            dniNumber: u.dniNumber || mergedMeta.dniNumber,
+            dniNumber: parsedMeta.dniNumber || u.dniNumber || mergedMeta.dniNumber,
             dniFrenteUrl: u.dniFrenteUrl !== undefined ? u.dniFrenteUrl : mergedMeta.dniFrenteUrl,
             dniDorsoUrl: u.dniDorsoUrl !== undefined ? u.dniDorsoUrl : mergedMeta.dniDorsoUrl,
-            dniUpdatedAt: u.dniUpdatedAt || mergedMeta.dniUpdatedAt,
-            dniVerified: u.dniVerified !== undefined ? u.dniVerified : mergedMeta.dniVerified,
+            dniUpdatedAt: parsedMeta.dniUpdatedAt || u.dniUpdatedAt || mergedMeta.dniUpdatedAt,
+            dniVerified: parsedMeta.dniVerified !== undefined ? parsedMeta.dniVerified : (u.dniVerified !== undefined ? u.dniVerified : mergedMeta.dniVerified),
             accountStatus: resolvedAccountStatus,
             registrationSource: parsedMeta.registrationSource || u.registrationSource || mergedMeta.registrationSource,
             requestedProfileType: parsedMeta.requestedProfileType || u.requestedProfileType || mergedMeta.requestedProfileType,
@@ -530,6 +536,10 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     const parsed = JSON.parse(storedUser);
                     if (parsed && parsed.email) {
                         const healed = healSingleUser(parsed);
+                        if (isEventOnlyAttendee(healed) || isBlockedOrNonSystemUser(healed)) {
+                            localStorage.removeItem('ht_session_user');
+                            return null;
+                        }
                         try { localStorage.setItem('ht_session_user', JSON.stringify(healed)); } catch {}
                         return healed;
                     }
@@ -546,7 +556,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         if (typeof window !== 'undefined') {
             try {
                 const raw = sessionStorage.getItem('ht_impersonating_admin');
-                return raw ? JSON.parse(raw) : null;
+                if (!raw) return null;
+                const parsed = healSingleUser(JSON.parse(raw));
+                if (!isCentralAdminOrSupervisor(parsed)) {
+                    sessionStorage.removeItem('ht_impersonating_admin');
+                    return null;
+                }
+                return parsed;
             } catch {
                 return null;
             }
@@ -2714,25 +2730,33 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         }
     };
 
-    const switchUserRole = (userId: string) => {
-        const found = usersList.find(u => u.id === userId);
-        if (found) {
-            const healed = healSingleUser(found);
-            setCurrentUser(healed);
-            localStorage.setItem('ht_session_user', JSON.stringify(healed));
-            localStorage.removeItem('ht_logged_out');
-        }
-    };
-
     const startImpersonation = (userId: string) => {
-        const target = usersList.find(u => u.id === userId);
-        if (!target || !currentUser) return;
-        const adminOrigin = impersonatingAdmin || currentUser;
-        setImpersonatingAdmin(adminOrigin);
-        try { sessionStorage.setItem('ht_impersonating_admin', JSON.stringify(adminOrigin)); } catch {}
+        const effectiveAdmin = impersonatingAdmin || currentUser;
+        // CANDADO ESTRICTO ANTI-ESCALACIÓN: Solo un Administrador Central puede iniciar o cambiar simulación de rol
+        if (!effectiveAdmin || !isCentralAdminOrSupervisor(effectiveAdmin)) {
+            console.warn('Seguridad RBAC: Intento de simulación de rol bloqueado. Se requiere rol Administrador.');
+            return;
+        }
+        const target = usersList.find(u => String(u.id) === String(userId));
+        if (!target) return;
         const healedTarget = healSingleUser(target);
+        if (isEventOnlyAttendee(healedTarget) || isBlockedOrNonSystemUser(healedTarget)) {
+            console.warn('Seguridad RBAC: No se puede simular sesión de un visitante de evento o solicitud pendiente.');
+            return;
+        }
+        if (String(healedTarget.id) === String(effectiveAdmin.id)) {
+            const restored = healSingleUser(effectiveAdmin);
+            setCurrentUser(restored);
+            setImpersonatingAdmin(null);
+            try { sessionStorage.removeItem('ht_impersonating_admin'); } catch {}
+            localStorage.setItem('ht_session_user', JSON.stringify(restored));
+            return;
+        }
+        setImpersonatingAdmin(effectiveAdmin);
+        try { sessionStorage.setItem('ht_impersonating_admin', JSON.stringify(effectiveAdmin)); } catch {}
         setCurrentUser(healedTarget);
         localStorage.setItem('ht_session_user', JSON.stringify(healedTarget));
+        localStorage.removeItem('ht_logged_out');
     };
 
     const stopImpersonation = () => {
@@ -2742,6 +2766,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         setImpersonatingAdmin(null);
         try { sessionStorage.removeItem('ht_impersonating_admin'); } catch {}
         localStorage.setItem('ht_session_user', JSON.stringify(restored));
+    };
+
+    const switchUserRole = (userId: string) => {
+        // Delegar a startImpersonation para garantizar verificación de Administrador y preservar banner de retorno
+        startImpersonation(userId);
     };
 
     const auditOperationalExpense = async (
@@ -3021,6 +3050,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     };
 
     const deleteUserSafe = async (id: string): Promise<boolean> => {
+        const effectiveCaller = impersonatingAdmin || currentUser;
+        if (!effectiveCaller || !isCentralAdminOrSupervisor(effectiveCaller)) {
+            console.warn('Seguridad RBAC: Solo un Administrador Central puede eliminar usuarios.');
+            return false;
+        }
         const user = usersList.find(u => u.id === id);
         if (user?.email?.toLowerCase() === 'admin@hempc.com.ar') {
             console.warn('Protección: No se puede eliminar el usuario administrador principal.');
@@ -3094,6 +3128,34 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     };
 
     const crud = async (table: string, item: any, action: 'insert' | 'update' | 'delete', idField = 'id') => {
+        // CANDADO ANTI-ESCALACIÓN DE PRIVILEGIOS EN TABLA USERS
+        if (table === 'users' && action !== 'delete' && item && typeof item === 'object') {
+            const effectiveCaller = impersonatingAdmin || currentUser;
+            const isCallerAdmin = Boolean(effectiveCaller && isCentralAdminOrSupervisor(effectiveCaller));
+            if (!isCallerAdmin) {
+                // Si no hay un Admin autenticado (ej. auto-registro público, acreditación a evento o un socio editando),
+                // jamás permitir asignar ni escalar a 'admin' ni 'super_admin'.
+                const existingTarget = usersList.find(u => String(u.id) === String(item.id));
+                if (item.role === 'admin' || item.role === 'super_admin') {
+                    if (!existingTarget || (existingTarget.role !== 'admin' && existingTarget.role !== 'super_admin')) {
+                        console.warn('Seguridad RBAC: Escalación de privilegios a Admin bloqueada.');
+                        return false;
+                    }
+                }
+                // Si hay un usuario no-admin logueado, no puede modificar cuentas de otros operadores activos del sistema
+                if (
+                    effectiveCaller &&
+                    existingTarget &&
+                    String(existingTarget.id) !== String(effectiveCaller.id) &&
+                    !isEventOnlyAttendee(existingTarget) &&
+                    existingTarget.accountStatus !== 'pending_approval'
+                ) {
+                    console.warn('Seguridad RBAC: Un usuario no-administrador no puede modificar perfiles de otros operadores.');
+                    return false;
+                }
+            }
+        }
+
         // Si es field_logs, normalizar id a UUID válido para que coincida con el tipo UUID de Supabase
         const normalizedItem =
             table === 'field_logs' && item && typeof item === 'object' && item[idField]

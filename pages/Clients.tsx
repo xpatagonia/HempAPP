@@ -58,7 +58,7 @@ const generatePassword = () => {
 export default function Clients() {
   const { 
     clients, addClient, updateClient, deleteClient, currentUser, 
-    usersList, addUser, updateUser, locations, plots, switchUserRole,
+    usersList, addUser, updateUser, locations, plots, switchUserRole, impersonatingAdmin,
     activeCampaign
   } = useAppContext();
 
@@ -788,33 +788,44 @@ export default function Clients() {
           </div>
         </div>
 
-        {/* SWITCHER RÁPIDO DE IDENTIDAD PARA PRUEBAS DE ACCESO */}
-        <div className="mt-5 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between text-xs gap-3">
-          <div className="flex items-center text-slate-400 text-[11px]">
-            <Users size={14} className="mr-1.5 text-hemp-400" />
-            <span className="font-bold text-slate-300 mr-2">Simular Rol en Vivo:</span>
-            <span className="text-slate-400 hidden sm:inline">Permite verificar en 1 clic el aislamiento de datos por estructura:</span>
+        {/* SWITCHER RÁPIDO DE IDENTIDAD PARA PRUEBAS DE ACCESO (EXCLUSIVO ADMINISTRADORES) */}
+        {(isAdmin || Boolean(impersonatingAdmin)) && (
+          <div className="mt-5 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between text-xs gap-3">
+            <div className="flex items-center text-slate-400 text-[11px]">
+              <Users size={14} className="mr-1.5 text-hemp-400" />
+              <span className="font-bold text-slate-300 mr-2">Simular Rol en Vivo (Admin):</span>
+              <span className="text-slate-400 hidden sm:inline">Permite verificar en 1 clic el aislamiento de datos por estructura:</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {usersList
+                .filter(
+                  u =>
+                    u.accessScope !== 'event_attendee' &&
+                    !u.eventRegistered &&
+                    u.accountStatus !== 'pending_approval' &&
+                    u.accountStatus !== 'rejected'
+                )
+                .slice(0, 6)
+                .map(u => {
+                  const isSelected = currentUser?.id === u.id;
+                  return (
+                    <button
+                      key={u.id}
+                      onClick={() => switchUserRole(u.id)}
+                      className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider transition ${
+                        isSelected 
+                          ? 'bg-emerald-500 text-slate-950 font-black shadow-lg scale-105' 
+                          : 'bg-slate-800/60 text-slate-300 hover:bg-slate-700 hover:text-white'
+                      }`}
+                      title={`Cambiar sesión a ${u.name} (${u.role})`}
+                    >
+                      {u.name.split(' ')[0]} ({u.structureRole ? u.structureRole.toUpperCase() : u.role === 'super_admin' ? 'ADMIN' : u.role.toUpperCase()})
+                    </button>
+                  );
+                })}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {usersList.slice(0, 5).map(u => {
-              const isSelected = currentUser?.id === u.id;
-              return (
-                <button
-                  key={u.id}
-                  onClick={() => switchUserRole(u.id)}
-                  className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider transition ${
-                    isSelected 
-                      ? 'bg-emerald-500 text-slate-950 font-black shadow-lg scale-105' 
-                      : 'bg-slate-800/60 text-slate-300 hover:bg-slate-700 hover:text-white'
-                  }`}
-                  title={`Cambiar sesión a ${u.name} (${u.role})`}
-                >
-                  {u.name.split(' ')[0]} ({u.structureRole ? u.structureRole.toUpperCase() : u.role === 'super_admin' ? 'ADMIN' : u.role.toUpperCase()})
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        )}
       </div>
 
       {/* FEEDBACK TOAST DE ENVÍO DE EMAIL */}

@@ -656,6 +656,22 @@ export default function Users() {
 
   const inputClass = "w-full border border-gray-300 dark:border-slate-800 bg-white dark:bg-slate-900 text-gray-900 dark:text-gray-100 p-3 rounded-2xl focus:ring-2 focus:ring-hemp-500 outline-none transition-all text-sm font-medium";
 
+  if (!isAdmin && !impersonatingAdmin) {
+    return (
+      <div className="max-w-xl mx-auto my-16 p-8 rounded-3xl bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/50 text-center space-y-4 shadow-lg">
+        <div className="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto">
+          <Lock size={24} />
+        </div>
+        <h2 className="text-lg font-black uppercase text-slate-900 dark:text-white">
+          Acceso Restringido a Dirección Central
+        </h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          El padrón global de operadores y permisos de acceso es administrado exclusivamente por la Cooperativa Central.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="animate-in fade-in duration-500 pb-12">
       {/* HEADER PRINCIPAL */}

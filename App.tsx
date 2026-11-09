@@ -37,11 +37,21 @@ import DocumentsVault from './pages/DocumentsVault';
 import ProducerGuide from './pages/ProducerGuide';
 import Events from './pages/Events';
 
+import { canAccessRoute, isBlockedOrNonSystemUser } from './src/utils/structurePermissions';
+
 const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
   const { currentUser } = useAppContext();
   
-  if (!currentUser) {
+  if (!currentUser || isBlockedOrNonSystemUser(currentUser)) {
     return <Navigate to="/login" replace />;
+  }
+  return <>{children}</>;
+};
+
+const RoleRoute = ({ routePath, children }: { routePath: string; children: React.ReactNode }) => {
+  const { currentUser } = useAppContext();
+  if (!currentUser || !canAccessRoute(currentUser, routePath)) {
+    return <Navigate to="/" replace />;
   }
   return <>{children}</>;
 };
@@ -73,14 +83,14 @@ export default function App() {
                   <Route path="/intelligence" element={<AgronomicIntelligence />} />
                   <Route path="/agro40" element={<Agriculture40 />} />
                   <Route path="/phytosanitary" element={<PhytosanitaryBook />} />
-                  <Route path="/finances" element={<FinancialReports />} />
+                  <Route path="/finances" element={<RoleRoute routePath="/finances"><FinancialReports /></RoleRoute>} />
                   <Route path="/documents" element={<DocumentsVault />} />
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/integrity" element={<IntegrityCheck />} />
                   <Route path="/advisor" element={<AIAdvisor />} />
                   <Route path="/varieties" element={<Varieties />} />
-                  <Route path="/suppliers" element={<Suppliers />} />
-                  <Route path="/clients" element={<Clients />} />
+                  <Route path="/suppliers" element={<RoleRoute routePath="/suppliers"><Suppliers /></RoleRoute>} />
+                  <Route path="/clients" element={<RoleRoute routePath="/clients"><Clients /></RoleRoute>} />
                   <Route path="/resources" element={<Resources />} />
                   <Route path="/storage" element={<Storage />} />
                   <Route path="/logistics-map" element={<LogisticsMap />} />
@@ -89,9 +99,9 @@ export default function App() {
                   <Route path="/locations/:id" element={<LocationDetails />} />
                   <Route path="/plots" element={<Plots />} />
                   <Route path="/plots/:id" element={<PlotDetails />} />
-                  <Route path="/users" element={<Users />} />
-                  <Route path="/events" element={<Events />} />
-                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/users" element={<RoleRoute routePath="/users"><Users /></RoleRoute>} />
+                  <Route path="/events" element={<RoleRoute routePath="/events"><Events /></RoleRoute>} />
+                  <Route path="/settings" element={<RoleRoute routePath="/settings"><Settings /></RoleRoute>} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </Layout>
@@ -102,4 +112,4 @@ export default function App() {
     </AppProvider>
   );
 }
-/* deploy-trigger: v7.21.0-stable */
+/* deploy-trigger: v7.44.0-stable */

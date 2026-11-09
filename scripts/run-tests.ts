@@ -7,7 +7,20 @@ import {
     calculateWaterEfficiency,
     calculateCarbonFootprint
 } from '../src/services/agro40Service.js';
-import { DEMO_PLOTS, DEMO_LOCATIONS, DEMO_CLIENTS, DEMO_VARIETIES, DEMO_SEED_BATCHES, DEMO_PROJECTS, DEMO_TASKS, DEMO_TRIALS, DEMO_AGROCHEMICAL_APPLICATIONS } from '../src/data/initialDemoData.js';
+import { DEMO_USERS_LIST, DEMO_SUPPLIERS, DEMO_STORAGE_POINTS, DEMO_PLOTS, DEMO_LOCATIONS, DEMO_CLIENTS, DEMO_VARIETIES, DEMO_SEED_BATCHES, DEMO_PROJECTS, DEMO_TASKS, DEMO_TRIALS, DEMO_AGROCHEMICAL_APPLICATIONS } from '../src/data/initialDemoData.js';
+import {
+    isCentralAdminOrSupervisor,
+    isSupplierRestrictedUser,
+    hasGlobalReadScope,
+    isBlockedOrNonSystemUser,
+    canAccessRoute,
+    canAccessLocation,
+    canAccessPlot,
+    canAccessClient,
+    getUserAccessAudit,
+    packUserMetaForPersistence,
+    unpackUserMetaFromPersistence
+} from '../src/utils/structurePermissions.js';
 import {
     sanitizePlotInputText,
     canUserEditOrMutatePlot,
@@ -1322,6 +1335,181 @@ test("13.5 Dos Estadios Oficiales de Notificación en Eventos: (1) Actualizació
             noticeMessage: 'Intento no autorizado'
         });
     }, /Solo los Administradores/);
+});
+
+test("13.6 Auditoría Exhaustiva de los 11 Operadores del Sistema, Solicitudes Pendientes y Visitantes de Eventos: RBAC, Rutas, Aislamiento Multi-Tenant y Persistencia en job_title", () => {
+    assert.equal(DEMO_USERS_LIST.length, 11, "El padrón canónico debe contar con los 11 operadores activos de la red");
+
+    // 1. Verificar persistencia round-trip de metadatos extendidos en job_title (Supabase public.users)
+    for (const u of DEMO_USERS_LIST) {
+        const packed = packUserMetaForPersistence({
+            ...u,
+            accessScope: 'system_user',
+            accountStatus: 'active'
+        });
+        const { cleanJobTitle, parsedMeta } = unpackUserMetaFromPersistence(packed);
+        assert.equal(cleanJobTitle, u.jobTitle, `El cargo limpio de ${u.name} debe preservarse intacto`);
+        assert.equal(parsedMeta.accessScope, 'system_user');
+        assert.equal(parsedMeta.accountStatus, 'active');
+        assert.equal(parsedMeta.structureRole, u.structureRole, `structureRole de ${u.name} debe persistir en job_title`);
+        assert.equal(parsedMeta.supplierId, u.supplierId, `supplierId de ${u.name} debe persistir en job_title`);
+        assert.equal(parsedMeta.supplierActorRole, u.supplierActorRole, `supplierActorRole de ${u.name} debe persistir en job_title`);
+        assert.equal(parsedMeta.memberType, u.memberType, `memberType de ${u.name} debe persistir en job_title`);
+    }
+
+    // 2. Verificar matriz exacta de alcance de establecimientos, parcelas y rutas para los 11 operadores
+    const expectedAuditMatrix: Record<string, {
+        role: string;
+        isCentralAdmin: boolean;
+        isGlobal: boolean;
+        isSupplier: boolean;
+        expectedLocations: number;
+        expectedPlots: number;
+        canUsersRoute: boolean;
+        canEventsRoute: boolean;
+        canSettingsRoute: boolean;
+        canFinancesRoute: boolean;
+        canClientsRoute: boolean;
+        canSuppliersRoute: boolean;
+    }> = {
+        'admin@hempc.com.ar': {
+            role: 'super_admin', isCentralAdmin: true, isGlobal: true, isSupplier: false,
+            expectedLocations: 4, expectedPlots: 44,
+            canUsersRoute: true, canEventsRoute: true, canSettingsRoute: true,
+            canFinancesRoute: true, canClientsRoute: true, canSuppliersRoute: true
+        },
+        'gaston@hempc.com.ar': {
+            role: 'admin', isCentralAdmin: true, isGlobal: true, isSupplier: false,
+            expectedLocations: 4, expectedPlots: 44,
+            canUsersRoute: true, canEventsRoute: true, canSettingsRoute: false,
+            canFinancesRoute: true, canClientsRoute: true, canSuppliersRoute: true
+        },
+        'andrea@patagonianc.com.ar': {
+            role: 'admin', isCentralAdmin: true, isGlobal: true, isSupplier: false,
+            expectedLocations: 4, expectedPlots: 44,
+            canUsersRoute: true, canEventsRoute: true, canSettingsRoute: false,
+            canFinancesRoute: true, canClientsRoute: true, canSuppliersRoute: true
+        },
+        'ricardo@hempc.com.ar': {
+            role: 'client', isCentralAdmin: false, isGlobal: false, isSupplier: false,
+            expectedLocations: 1, expectedPlots: 12,
+            canUsersRoute: false, canEventsRoute: false, canSettingsRoute: false,
+            canFinancesRoute: true, canClientsRoute: true, canSuppliersRoute: false
+        },
+        'centroambientalpatagonico@gmail.com': {
+            role: 'client', isCentralAdmin: false, isGlobal: false, isSupplier: false,
+            expectedLocations: 1, expectedPlots: 20,
+            canUsersRoute: false, canEventsRoute: false, canSettingsRoute: false,
+            canFinancesRoute: true, canClientsRoute: true, canSuppliersRoute: false
+        },
+        'joaquin@hempc.com.ar': {
+            role: 'technician', isCentralAdmin: false, isGlobal: false, isSupplier: false,
+            expectedLocations: 1, expectedPlots: 20,
+            canUsersRoute: false, canEventsRoute: false, canSettingsRoute: false,
+            canFinancesRoute: true, canClientsRoute: true, canSuppliersRoute: true
+        },
+        'julian@hempc.com.ar': {
+            role: 'technician', isCentralAdmin: false, isGlobal: false, isSupplier: false,
+            expectedLocations: 1, expectedPlots: 12,
+            canUsersRoute: false, canEventsRoute: false, canSettingsRoute: false,
+            canFinancesRoute: true, canClientsRoute: true, canSuppliersRoute: true
+        },
+        'matias@hempc.com.ar': {
+            role: 'technician', isCentralAdmin: false, isGlobal: false, isSupplier: false,
+            expectedLocations: 1, expectedPlots: 12,
+            canUsersRoute: false, canEventsRoute: false, canSettingsRoute: false,
+            canFinancesRoute: true, canClientsRoute: true, canSuppliersRoute: true
+        },
+        'remy@hempc.com.ar': {
+            role: 'viewer', isCentralAdmin: false, isGlobal: false, isSupplier: true,
+            expectedLocations: 3, expectedPlots: 33,
+            canUsersRoute: false, canEventsRoute: false, canSettingsRoute: false,
+            canFinancesRoute: false, canClientsRoute: false, canSuppliersRoute: true
+        },
+        'hempit@hempc.com.ar': {
+            role: 'viewer', isCentralAdmin: false, isGlobal: false, isSupplier: true,
+            expectedLocations: 3, expectedPlots: 33,
+            canUsersRoute: false, canEventsRoute: false, canSettingsRoute: false,
+            canFinancesRoute: false, canClientsRoute: false, canSuppliersRoute: true
+        },
+        'gblocki@anandapampa.com.ar': {
+            role: 'viewer', isCentralAdmin: false, isGlobal: false, isSupplier: true,
+            expectedLocations: 3, expectedPlots: 11,
+            canUsersRoute: false, canEventsRoute: false, canSettingsRoute: false,
+            canFinancesRoute: false, canClientsRoute: false, canSuppliersRoute: true
+        }
+    };
+
+    for (const user of DEMO_USERS_LIST) {
+        const exp = expectedAuditMatrix[user.email.toLowerCase()];
+        assert.ok(exp, `Debe existir especificación de auditoría para ${user.email}`);
+        assert.equal(user.role, exp.role, `Rol de ${user.name} debe ser ${exp.role}`);
+        assert.equal(isCentralAdminOrSupervisor(user), exp.isCentralAdmin, `isCentralAdmin de ${user.name}`);
+        assert.equal(hasGlobalReadScope(user), exp.isGlobal, `hasGlobalReadScope de ${user.name}`);
+        assert.equal(isSupplierRestrictedUser(user), exp.isSupplier, `isSupplierRestrictedUser de ${user.name}`);
+
+        const audit = getUserAccessAudit(
+            user,
+            DEMO_LOCATIONS,
+            DEMO_PLOTS,
+            DEMO_CLIENTS,
+            DEMO_STORAGE_POINTS,
+            DEMO_SUPPLIERS,
+            DEMO_VARIETIES,
+            DEMO_SEED_BATCHES
+        );
+        assert.equal(audit.allowedLocationsCount, exp.expectedLocations, `${user.name} debe acceder exactamente a ${exp.expectedLocations} campo(s)`);
+        assert.equal(audit.allowedPlotsCount, exp.expectedPlots, `${user.name} debe acceder exactamente a ${exp.expectedPlots} parcela(s)`);
+
+        assert.equal(canAccessRoute(user, '/users'), exp.canUsersRoute, `Acceso de ${user.name} a /users`);
+        assert.equal(canAccessRoute(user, '/events'), exp.canEventsRoute, `Acceso de ${user.name} a /events`);
+        assert.equal(canAccessRoute(user, '/settings'), exp.canSettingsRoute, `Acceso de ${user.name} a /settings`);
+        assert.equal(canAccessRoute(user, '/finances'), exp.canFinancesRoute, `Acceso de ${user.name} a /finances`);
+        assert.equal(canAccessRoute(user, '/clients'), exp.canClientsRoute, `Acceso de ${user.name} a /clients`);
+        assert.equal(canAccessRoute(user, '/suppliers'), exp.canSuppliersRoute, `Acceso de ${user.name} a /suppliers`);
+
+        // Si el usuario no es Admin Central, jamás puede mutar parcelas de otro establecimiento
+        if (!exp.isCentralAdmin) {
+            const forbiddenPlots = DEMO_PLOTS.filter(p => !canAccessPlot(user, p, DEMO_LOCATIONS, DEMO_CLIENTS, DEMO_VARIETIES, DEMO_SEED_BATCHES));
+            for (const fp of forbiddenPlots) {
+                const editPerm = canUserEditOrMutatePlot(user, fp, DEMO_LOCATIONS, DEMO_CLIENTS);
+                assert.equal(
+                    editPerm.allowed,
+                    false,
+                    `${user.name} jamás debe poder editar la parcela ajena ${fp.name}`
+                );
+            }
+        }
+    }
+
+    // 3. Verificar bloqueo total de visitantes de eventos y solicitudes pendientes (ej. Duilio Bakst)
+    const { user: pendingApplicant } = createPendingPublicRegistration({
+        name: 'Duilio Bakst',
+        email: 'duiliobakst1@gmail.com',
+        phone: '+5493416059066',
+        dniNumber: '20147298006',
+        requestedProfileType: 'tecnico_institucion',
+        organizationName: 'VCA',
+        localityOrProvince: 'Rosario- Santa Fe',
+        registrationSource: 'self_service_platform'
+    });
+    assert.equal(isBlockedOrNonSystemUser(pendingApplicant), true);
+    assert.equal(hasGlobalReadScope(pendingApplicant), false);
+    assert.equal(canAccessRoute(pendingApplicant, '/'), false);
+    assert.equal(DEMO_PLOTS.filter(p => canAccessPlot(pendingApplicant, p, DEMO_LOCATIONS, DEMO_CLIENTS)).length, 0);
+
+    const eventVisitor = createEventRegistrationRecord({
+        name: 'Visitante Jornada',
+        email: 'visitante.jornada@test.com',
+        phone: '+5492804000000',
+        dniNumber: '30111222',
+        localityOrProvince: 'Trelew',
+        event: DEFAULT_FIELD_EVENTS[0]
+    });
+    assert.equal(isBlockedOrNonSystemUser(eventVisitor), true);
+    assert.equal(hasGlobalReadScope(eventVisitor), false, "Un visitante de evento con role='viewer' jamás debe recibir hasGlobalReadScope");
+    assert.equal(canAccessRoute(eventVisitor, '/'), false);
+    assert.equal(DEMO_PLOTS.filter(p => canAccessPlot(eventVisitor, p, DEMO_LOCATIONS, DEMO_CLIENTS)).length, 0);
 });
 
 console.log("\n=================================================");

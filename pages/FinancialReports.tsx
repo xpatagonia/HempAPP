@@ -14,10 +14,12 @@ import {
 } from 'lucide-react';
 import { AgrochemicalApplication, OperationalExpense, ExpenseCategory, ExpenseScope, ExpenseAuditStatus } from '../types';
 import { getPlotAgrochemicalApplications } from '../src/services/agro40Service';
+import { isCentralAdminOrSupervisor, isSupplierRestrictedUser } from '../src/utils/structurePermissions';
+import { partitionUsersByScope } from '../src/services/eventsManagementService';
 
 export default function FinancialReports() {
   const { 
-    plots, locations, varieties, resources, currentUser, usersList, switchUserRole,
+    plots, locations, varieties, resources, currentUser, usersList, switchUserRole, impersonatingAdmin,
     operationalExpenses, addOperationalExpense, updateOperationalExpense, 
     deleteOperationalExpense, auditOperationalExpense 
   } = useAppContext();
@@ -43,24 +45,27 @@ export default function FinancialReports() {
   const [ledgerStatusFilter, setLedgerStatusFilter] = useState<'all' | ExpenseAuditStatus>('all');
   const [ledgerSearch, setLedgerSearch] = useState('');
 
-  // Identificar si el usuario activo es Socio Productor o Cooperativa Central
+  // Identificar si el usuario activo es Cooperativa Central (Admin) o estructura aislada de Socio/Técnico
   const activeUser = currentUser || usersList[0];
-  const isSocio = activeUser.memberType === 'Socio_Productor' || activeUser.role === 'client';
-  const isCoopAdmin = !isSocio;
+  const isCoopAdmin = isCentralAdminOrSupervisor(activeUser);
+  const isSocio = !isCoopAdmin;
+  const canSimulatePerspective = Boolean(isCoopAdmin || impersonatingAdmin);
 
-  // Parcelas permitidas para el usuario actual
-  // Si es Socio: SOLO las parcelas que le pertenecen (por assignedPlotIds o ownerName)
-  // Si es Cooperativa: TODAS las parcelas
+  const activeSystemUsers = useMemo(
+    () =>
+      partitionUsersByScope(usersList || []).systemUsers.filter(
+        u =>
+          u.accountStatus !== 'pending_approval' &&
+          u.accountStatus !== 'rejected' &&
+          !isSupplierRestrictedUser(u)
+      ),
+    [usersList]
+  );
+
+  // Parcelas permitidas para el usuario actual: `plots` provisto por AppContext ya viene estrictamente filtrado por `canAccessPlot`
   const accessiblePlots = useMemo(() => {
-    if (!isSocio) return plots;
-    if (activeUser.assignedPlotIds && activeUser.assignedPlotIds.length > 0) {
-      return plots.filter(p => activeUser.assignedPlotIds?.includes(p.id));
-    }
-    if (activeUser.organizationName) {
-      return plots.filter(p => p.ownerName?.toLowerCase().includes(activeUser.organizationName!.toLowerCase()));
-    }
-    return plots.slice(0, 1); // fallback seguro
-  }, [plots, isSocio, activeUser]);
+    return plots || [];
+  }, [plots]);
 
   // Formulario nuevo costo operativo
   const [formScope, setFormScope] = useState<ExpenseScope>(isSocio ? 'PARCELA_SOCIO' : 'PARCELA_SOCIO');
@@ -405,23 +410,25 @@ export default function FinancialReports() {
             </div>
           </div>
 
-          {/* SIMULADOR DE PERSPECTIVA (CAMBIAR DE ROL PARA PRUEBAS) */}
-          <div className="flex items-center gap-2 shrink-0 bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-              <Users size={14} /> Cambiar Perspectiva:
-            </span>
-            <select
-              value={activeUser.id}
-              onChange={(e) => switchUserRole(e.target.value)}
-              className="text-xs font-bold text-slate-800 dark:text-slate-200 bg-transparent border-none focus:outline-none cursor-pointer"
-            >
-              {usersList.map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.memberType === 'Socio_Productor' ? '🚜 Socio: ' : '🏢 Coop: '} {u.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* SIMULADOR DE PERSPECTIVA (EXCLUSIVO PARA ADMINISTRADORES) */}
+          {canSimulatePerspective && (
+            <div className="flex items-center gap-2 shrink-0 bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                <Users size={14} /> Simular Perspectiva (Admin):
+              </span>
+              <select
+                value={activeUser.id}
+                onChange={(e) => switchUserRole(e.target.value)}
+                className="text-xs font-bold text-slate-800 dark:text-slate-200 bg-transparent border-none focus:outline-none cursor-pointer"
+              >
+                {activeSystemUsers.map(u => (
+                  <option key={u.id} value={u.id}>
+                    {isCentralAdminOrSupervisor(u) ? '🏢 Coop: ' : '🚜 Socio/Téc: '} {u.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 

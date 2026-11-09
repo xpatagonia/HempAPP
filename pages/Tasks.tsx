@@ -27,13 +27,14 @@ import {
 } from '../src/services/pushNotificationService';
 import { sendLaborAssignedEmail, isRealEmailDelivery } from '../src/services/emailNotificationService';
 import { canAccessTask, canAccessPlot } from '../src/utils/structurePermissions';
+import { partitionUsersByScope } from '../src/services/eventsManagementService';
 import { DateInputAr } from '../src/components/DateInputAr';
 import { formatDateAr } from '../src/utils/dateFormat';
 
 export default function Tasks() {
   const { 
     tasks, addTask, updateTask, deleteTask, homologateLabor, 
-    currentUser, usersList, plots, varieties, switchUserRole,
+    currentUser, usersList, plots, varieties, switchUserRole, impersonatingAdmin,
     locations, clients, resources, suppliers, agrochemicalApplications
   } = useAppContext();
 
@@ -158,7 +159,15 @@ export default function Tasks() {
   });
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
-  const isSocio = currentUser?.memberType === 'Socio_Productor' || currentUser?.role === 'client';
+  const canSimulatePerspective = Boolean(isAdmin || impersonatingAdmin);
+  const isSocio = !isAdmin;
+  const activeSystemUsers = useMemo(
+    () =>
+      partitionUsersByScope(usersList || []).systemUsers.filter(
+        u => u.accountStatus !== 'pending_approval' && u.accountStatus !== 'rejected'
+      ),
+    [usersList]
+  );
 
   const handleEvaluatePush = async () => {
     const alerts = await evaluateUpcomingTasksReminders(tasks, { force: true });
@@ -641,34 +650,48 @@ export default function Tasks() {
             </p>
           </div>
 
-          {/* SIMULADOR DE PERSPECTIVA DE ROL */}
-          <div className="bg-slate-800/80 backdrop-blur border border-slate-700 p-3 rounded-xl flex flex-col gap-2 min-w-[280px]">
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-              <span>Perspectiva Activa:</span>
-              <span className="text-emerald-400 font-mono text-[10px]">{currentUser?.role}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-emerald-600/30 flex items-center justify-center text-emerald-400 font-bold text-xs border border-emerald-500/30">
-                {isSocio ? <User size={16} /> : <Building2 size={16} />}
+          {/* SIMULADOR DE PERSPECTIVA DE ROL (SOLO VISIBLE PARA ADMINISTRADORES) */}
+          {canSimulatePerspective ? (
+            <div className="bg-slate-800/80 backdrop-blur border border-slate-700 p-3 rounded-xl flex flex-col gap-2 min-w-[280px]">
+              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                <span>Simulador Admin:</span>
+                <span className="text-emerald-400 font-mono text-[10px]">{currentUser?.role}</span>
               </div>
-              <select 
-                className="bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200 p-1.5 flex-1 focus:ring-1 focus:ring-emerald-500 outline-none"
-                value={currentUser?.id}
-                onChange={(e) => switchUserRole(e.target.value)}
-              >
-                {usersList.map(u => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} ({u.memberType === 'Socio_Productor' ? 'Socio' : 'Cooperativa'})
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-600/30 flex items-center justify-center text-emerald-400 font-bold text-xs border border-emerald-500/30">
+                  {isSocio ? <User size={16} /> : <Building2 size={16} />}
+                </div>
+                <select 
+                  className="bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-200 p-1.5 flex-1 focus:ring-1 focus:ring-emerald-500 outline-none"
+                  value={currentUser?.id}
+                  onChange={(e) => switchUserRole(e.target.value)}
+                >
+                  {activeSystemUsers.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.memberType === 'Socio_Productor' ? 'Socio' : u.memberType === 'Proveedor_Homologado' ? 'Semillero' : 'Cooperativa'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="text-[10px] text-slate-400">
+                {isSocio 
+                  ? '📍 Modo Socio/Técnico: Carga labores directas de sus lotes.'
+                  : '🛡️ Modo Cooperativa: Homologación técnica y auditoría global.'}
+              </div>
             </div>
-            <div className="text-[10px] text-slate-400">
-              {isSocio 
-                ? '📍 Modo Socio: Carga labores directas de sus lotes.'
-                : '🛡️ Modo Cooperativa: Homologación técnica y auditoría global.'}
+          ) : (
+            <div className="bg-slate-800/80 backdrop-blur border border-slate-700 p-3 rounded-xl flex flex-col gap-1 min-w-[240px]">
+              <div className="text-[10px] font-mono font-bold text-emerald-400 uppercase">
+                Alcance Aislado Activo
+              </div>
+              <div className="text-xs font-black text-white">
+                {currentUser?.name} ({currentUser?.organizationName || 'Establecimiento'})
+              </div>
+              <div className="text-[10px] text-slate-400">
+                📍 Operando exclusivamente sobre los lotes de su estructura ({plots.length} parcelas).
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
