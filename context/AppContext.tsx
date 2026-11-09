@@ -1057,6 +1057,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
                 return {
                     ...baseLoc,
+                    address: (loc.address && loc.address.trim()) || (baseLoc.address && baseLoc.address.trim()) || demoMatch?.address || roster.linkedClient?.address || '',
                     clientId: roster.linkedClient?.id || baseLoc.clientId || demoMatch?.clientId,
                     ownerName: roster.ownerUser?.name || baseLoc.ownerName || demoMatch?.ownerName || roster.linkedClient?.contactName || 'Sin Asignar',
                     ownerLegalName: baseLoc.ownerLegalName || roster.linkedClient?.name || demoMatch?.ownerLegalName || '',
@@ -2111,7 +2112,47 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                             return healedApps;
                         });
                     }, DEMO_TASKS),
-                    fetchTable('projects', setProjects, DEMO_PROJECTS),
+                    fetchTable('projects', (data: any[]) => {
+                        const EVENTS_MARKER_START = '<!--HEMPC_EVENTS_JSON:';
+                        const EVENTS_MARKER_END = ':END_HEMPC_EVENTS-->';
+                        let unpackedRemoteEvents: FieldEvent[] = [];
+                        const cleanedProjects = (data || []).map((proj: Project) => {
+                            const desc = String(proj.description || '');
+                            const sIdx = desc.indexOf(EVENTS_MARKER_START);
+                            const eIdx = desc.indexOf(EVENTS_MARKER_END);
+                            if (sIdx !== -1 && eIdx !== -1 && eIdx > sIdx) {
+                                const cleanDesc = desc.slice(0, sIdx).trim();
+                                const jsonStr = desc.slice(sIdx + EVENTS_MARKER_START.length, eIdx);
+                                try {
+                                    const parsed = JSON.parse(jsonStr);
+                                    if (Array.isArray(parsed)) {
+                                        unpackedRemoteEvents = parsed;
+                                    }
+                                } catch {}
+                                return { ...proj, description: cleanDesc };
+                            }
+                            return proj;
+                        });
+                        setProjects(cleanedProjects);
+                        try { localStorage.setItem('ht_projects', JSON.stringify(cleanedProjects)); } catch {}
+                        if (unpackedRemoteEvents.length > 0) {
+                            setFieldEvents(prev => {
+                                const map = new Map<string, FieldEvent>();
+                                unpackedRemoteEvents.forEach(ev => {
+                                    if (ev && ev.id) map.set(ev.id, ev);
+                                });
+                                prev.forEach(ev => {
+                                    if (ev && ev.id && !map.has(ev.id)) map.set(ev.id, ev);
+                                });
+                                DEFAULT_FIELD_EVENTS.forEach(defEvt => {
+                                    if (!map.has(defEvt.id)) map.set(defEvt.id, defEvt);
+                                });
+                                const merged = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+                                try { localStorage.setItem('ht_field_events_v1', JSON.stringify(merged)); } catch {}
+                                return merged;
+                            });
+                        }
+                    }, DEMO_PROJECTS),
                     fetchTable('clients', (data: any[]) => {
                         const healed = healClients(data || []);
                         setClients(healed);
@@ -4218,17 +4259,41 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 });
                 setFieldEvents(updatedList);
                 try { localStorage.setItem('ht_field_events_v1', JSON.stringify(updatedList)); } catch {}
+                try {
+                    const targetProj = projects[0] || DEMO_PROJECTS[0];
+                    if (targetProj?.id) {
+                        const cleanDesc = String(targetProj.description || '')
+                            .replace(/\s*<!--HEMPC_EVENTS_JSON:[\s\S]*?:END_HEMPC_EVENTS-->/g, '')
+                            .trim();
+                        const packedDesc = `${cleanDesc} <!--HEMPC_EVENTS_JSON:${JSON.stringify(updatedList)}:END_HEMPC_EVENTS-->`.trim();
+                        await supabase
+                            .from('projects')
+                            .update({ description: packedDesc })
+                            .eq('id', targetProj.id);
+                    }
+                } catch {}
                 return savedEvent;
             },
             deleteFieldEvent: async (id: string) => {
                 if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'super_admin')) {
                     throw new Error('Solo los Administradores pueden eliminar eventos.');
                 }
-                setFieldEvents(prev => {
-                    const next = prev.filter(e => e.id !== id);
-                    try { localStorage.setItem('ht_field_events_v1', JSON.stringify(next)); } catch {}
-                    return next;
-                });
+                const nextList = fieldEvents.filter(e => e.id !== id);
+                setFieldEvents(nextList);
+                try { localStorage.setItem('ht_field_events_v1', JSON.stringify(nextList)); } catch {}
+                try {
+                    const targetProj = projects[0] || DEMO_PROJECTS[0];
+                    if (targetProj?.id) {
+                        const cleanDesc = String(targetProj.description || '')
+                            .replace(/\s*<!--HEMPC_EVENTS_JSON:[\s\S]*?:END_HEMPC_EVENTS-->/g, '')
+                            .trim();
+                        const packedDesc = `${cleanDesc} <!--HEMPC_EVENTS_JSON:${JSON.stringify(nextList)}:END_HEMPC_EVENTS-->`.trim();
+                        await supabase
+                            .from('projects')
+                            .update({ description: packedDesc })
+                            .eq('id', targetProj.id);
+                    }
+                } catch {}
                 return true;
             },
             isRefreshing, refreshData,

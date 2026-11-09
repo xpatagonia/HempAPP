@@ -300,194 +300,198 @@ export default function EventRouteMapPreview({
         </MapContainer>
       </div>
 
-      {/* Coordenadas GPS e Instructivo Paso a Paso de Cómo Llegar */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl p-3.5 border border-slate-200 dark:border-slate-800 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <span className="text-[9px] font-mono uppercase text-slate-400 block">
-              Coordenadas Oficiales para GPS
-            </span>
-            <span className="font-mono text-xs font-black text-[#006633] dark:text-emerald-400">
-              {nav.decimalLabel}
-            </span>
-            <span className="font-mono text-[10px] text-slate-500 ml-2">({nav.dmsLabel})</span>
-          </div>
+      {/* Coordenadas GPS e Instructivo Paso a Paso de Cómo Llegar (Solo en vista de Pase / Asistente, oculto en el editor de creación de evento) */}
+      {!editable && (
+        <>
+          <div className="bg-white dark:bg-slate-900 rounded-xl p-3.5 border border-slate-200 dark:border-slate-800 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span className="text-[9px] font-mono uppercase text-slate-400 block">
+                  Coordenadas Oficiales para GPS
+                </span>
+                <span className="font-mono text-xs font-black text-[#006633] dark:text-emerald-400">
+                  {nav.decimalLabel}
+                </span>
+                <span className="font-mono text-[10px] text-slate-500 ml-2">({nav.dmsLabel})</span>
+              </div>
 
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setShowSnapshotPreview(v => !v)}
-              className="px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-[#006633] dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer"
-            >
-              <Camera size={12} />
-              <span>{showSnapshotPreview ? 'Ocultar Captura' : 'Ver Captura Mapa'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleCopyCoords}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer"
-            >
-              {copiedCoords ? (
-                <>
-                  <Check size={12} className="text-emerald-600" />
-                  <span>GPS Copiado</span>
-                </>
-              ) : (
-                <>
-                  <Copy size={12} />
-                  <span>Copiar GPS</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Vista Previa de la Captura Cartográfica Oficial CLARA que se adjunta al Instructivo */}
-        {showSnapshotPreview && capturedSnapshotUrl && (
-          <div className="rounded-xl overflow-hidden border-2 border-[#006633] bg-white space-y-2 p-2.5 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-              <span className="text-[10px] font-mono font-black uppercase text-[#006633] flex items-center gap-1.5">
-                <Camera size={13} />
-                <span>Captura Vial Regional Clara (Con Referencia de Ciudad y Rutas)</span>
-              </span>
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  disabled={isCapturing}
-                  onClick={handleDownloadMapPng}
-                  className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-[10px] font-bold uppercase flex items-center gap-1 cursor-pointer"
+                  onClick={() => setShowSnapshotPreview(v => !v)}
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 text-[#006633] dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer"
                 >
-                  <Download size={11} />
-                  <span>Guardar PNG</span>
+                  <Camera size={12} />
+                  <span>{showSnapshotPreview ? 'Ocultar Captura' : 'Ver Captura Mapa'}</span>
                 </button>
+
                 <button
                   type="button"
-                  disabled={isCapturing}
-                  onClick={handleDownloadHowToArrivePdf}
-                  className="px-2.5 py-1 rounded-lg bg-[#006633] hover:bg-[#004d26] text-white text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer"
+                  onClick={handleCopyCoords}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer"
                 >
-                  {isCapturing ? <Loader2 size={11} className="animate-spin" /> : <FileText size={11} />}
-                  <span>Instructivo PDF</span>
+                  {copiedCoords ? (
+                    <>
+                      <Check size={12} className="text-emerald-600" />
+                      <span>GPS Copiado</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={12} />
+                      <span>Copiar GPS</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
-            <img
-              src={capturedSnapshotUrl}
-              alt={`Captura del mapa regional de cómo llegar a ${event.venueName || 'la sede'}`}
-              className="w-full h-auto rounded-lg border border-slate-200 bg-slate-50 block"
-            />
-          </div>
-        )}
 
-        {/* Instructivo Paso a Paso de Cómo Llegar (3 Tramos Viales) */}
-        <div className="border-t border-slate-100 dark:border-slate-800 pt-2.5 space-y-2">
-          <div className="text-[10px] font-mono font-black uppercase tracking-wider text-[#006633] dark:text-emerald-400">
-            INSTRUCTIVO VIAL PASO A PASO DE CÓMO LLEGAR ({nav.address}):
-          </div>
-          <div className="grid grid-cols-1 gap-1.5">
-            {nav.routeSteps.map(step => (
-              <div
-                key={step.stepNumber}
-                className="flex items-start gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/70 text-[11px]"
-              >
-                <span
-                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black text-white shrink-0 mt-0.5 ${
-                    step.stepNumber === 3
-                      ? 'bg-[#006633]'
-                      : step.stepNumber === 1
-                        ? 'bg-sky-600'
-                        : 'bg-amber-600'
-                  }`}
-                >
-                  {step.stepNumber}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center justify-between gap-1">
-                    <strong className="text-slate-900 dark:text-white font-black text-[11px]">
-                      {step.title}
-                    </strong>
-                    <span className="font-mono text-[10px] font-bold text-[#006633] dark:text-emerald-400">
-                      GPS: {step.coordinatesLabel}
-                    </span>
+            {/* Vista Previa de la Captura Cartográfica Oficial CLARA que se adjunta al Instructivo */}
+            {showSnapshotPreview && capturedSnapshotUrl && (
+              <div className="rounded-xl overflow-hidden border-2 border-[#006633] bg-white space-y-2 p-2.5 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                  <span className="text-[10px] font-mono font-black uppercase text-[#006633] flex items-center gap-1.5">
+                    <Camera size={13} />
+                    <span>Captura Vial Regional Clara (Con Referencia de Ciudad y Rutas)</span>
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={isCapturing}
+                      onClick={handleDownloadMapPng}
+                      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-[10px] font-bold uppercase flex items-center gap-1 cursor-pointer"
+                    >
+                      <Download size={11} />
+                      <span>Guardar PNG</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isCapturing}
+                      onClick={handleDownloadHowToArrivePdf}
+                      className="px-2.5 py-1 rounded-lg bg-[#006633] hover:bg-[#004d26] text-white text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer"
+                    >
+                      {isCapturing ? <Loader2 size={11} className="animate-spin" /> : <FileText size={11} />}
+                      <span>Instructivo PDF</span>
+                    </button>
                   </div>
-                  <p className="text-slate-600 dark:text-slate-300 text-[11px] leading-snug mt-0.5">
-                    {step.description}
-                  </p>
                 </div>
+                <img
+                  src={capturedSnapshotUrl}
+                  alt={`Captura del mapa regional de cómo llegar a ${event.venueName || 'la sede'}`}
+                  className="w-full h-auto rounded-lg border border-slate-200 bg-slate-50 block"
+                />
               </div>
-            ))}
+            )}
+
+            {/* Instructivo Paso a Paso de Cómo Llegar (3 Tramos Viales) */}
+            <div className="border-t border-slate-100 dark:border-slate-800 pt-2.5 space-y-2">
+              <div className="text-[10px] font-mono font-black uppercase tracking-wider text-[#006633] dark:text-emerald-400">
+                INSTRUCTIVO VIAL PASO A PASO DE CÓMO LLEGAR ({nav.address}):
+              </div>
+              <div className="grid grid-cols-1 gap-1.5">
+                {nav.routeSteps.map(step => (
+                  <div
+                    key={step.stepNumber}
+                    className="flex items-start gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/70 text-[11px]"
+                  >
+                    <span
+                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black text-white shrink-0 mt-0.5 ${
+                        step.stepNumber === 3
+                          ? 'bg-[#006633]'
+                          : step.stepNumber === 1
+                            ? 'bg-sky-600'
+                            : 'bg-amber-600'
+                      }`}
+                    >
+                      {step.stepNumber}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center justify-between gap-1">
+                        <strong className="text-slate-900 dark:text-white font-black text-[11px]">
+                          {step.title}
+                        </strong>
+                        <span className="font-mono text-[10px] font-bold text-[#006633] dark:text-emerald-400">
+                          GPS: {step.coordinatesLabel}
+                        </span>
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-300 text-[11px] leading-snug mt-0.5">
+                        {step.description}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Botonera Directa para Vincular el GPS del Celular + Descargar Instructivo con Captura de Mapa */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <a
-          href={nav.googleMapsDirectionsUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm transition"
-        >
-          <Navigation size={14} />
-          <span>Abrir GPS Celular (Google Maps)</span>
-          <ExternalLink size={11} />
-        </a>
-
-        <a
-          href={nav.wazeNavigateUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-[#DDDB00] font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm transition"
-        >
-          <MapPin size={14} />
-          <span>Iniciar Ruta en Waze GPS</span>
-          <ExternalLink size={11} />
-        </a>
-
-        <button
-          type="button"
-          disabled={isCapturing}
-          onClick={handleDownloadHowToArrivePdf}
-          className="py-2.5 px-3 rounded-xl bg-[#006633] hover:bg-[#004d26] text-white font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm cursor-pointer transition"
-        >
-          {isCapturing ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
-          <span>Descargar Instructivo Cómo Llegar + Mapa (PDF)</span>
-        </button>
-
-        <button
-          type="button"
-          disabled={isCapturing}
-          onClick={handleDownloadMapPng}
-          className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-[#DDDB00] font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm cursor-pointer transition"
-        >
-          <Camera size={13} />
-          <span>Descargar Captura del Mapa (PNG)</span>
-        </button>
-
-        {!compact && (
-          <>
-            <button
-              type="button"
-              onClick={() => downloadEventCalendarICS(event as FieldEvent, attendee)}
-              className="py-2 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-[#006633] dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <Calendar size={13} />
-              <span>Agendar en Celular (.ICS + Alarma GPS)</span>
-            </button>
-
+          {/* Botonera Directa para Vincular el GPS del Celular + Descargar Instructivo con Captura de Mapa */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <a
-              href={whatsappGateUrl}
+              href={nav.googleMapsDirectionsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="py-2 px-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5"
+              className="py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm transition"
             >
-              <Phone size={13} />
-              <span>Asistencia Vial / Guardia en Tranquera</span>
+              <Navigation size={14} />
+              <span>Abrir GPS Celular (Google Maps)</span>
+              <ExternalLink size={11} />
             </a>
-          </>
-        )}
-      </div>
+
+            <a
+              href={nav.wazeNavigateUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-[#DDDB00] font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm transition"
+            >
+              <MapPin size={14} />
+              <span>Iniciar Ruta en Waze GPS</span>
+              <ExternalLink size={11} />
+            </a>
+
+            <button
+              type="button"
+              disabled={isCapturing}
+              onClick={handleDownloadHowToArrivePdf}
+              className="py-2.5 px-3 rounded-xl bg-[#006633] hover:bg-[#004d26] text-white font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm cursor-pointer transition"
+            >
+              {isCapturing ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+              <span>Descargar Instructivo Cómo Llegar + Mapa (PDF)</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={isCapturing}
+              onClick={handleDownloadMapPng}
+              className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-[#DDDB00] font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-sm cursor-pointer transition"
+            >
+              <Camera size={13} />
+              <span>Descargar Captura del Mapa (PNG)</span>
+            </button>
+
+            {!compact && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => downloadEventCalendarICS(event as FieldEvent, attendee)}
+                  className="py-2 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 text-[#006633] dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Calendar size={13} />
+                  <span>Agendar en Celular (.ICS + Alarma GPS)</span>
+                </button>
+
+                <a
+                  href={whatsappGateUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2 px-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5"
+                >
+                  <Phone size={13} />
+                  <span>Asistencia Vial / Guardia en Tranquera</span>
+                </a>
+              </>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

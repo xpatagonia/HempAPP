@@ -485,22 +485,16 @@ export default function Events() {
   // Acción Admin: Guardar nuevo Evento / Visita Programada
   const handleSaveEventSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanTitle = (eventForm.title || '').trim();
-    const cleanDate = (eventForm.date || '').trim();
-    if (!cleanTitle || !cleanDate) {
-      showNotice(
-        false,
-        'Datos incompletos',
-        'Por favor completá el Título del Evento y la Fecha Programada.'
-      );
-      return;
-    }
-
     const fallbackVenue =
       (eventForm.venueName || '').trim() ||
       (eventForm.address || '').trim() ||
       enabledEstablishments.find(est => est.locationId === eventForm.locationId)?.venueName ||
       'Predio / Locación Oficial del Evento';
+
+    const cleanTitle =
+      (eventForm.title || '').trim() || `Visita Técnica Programada — ${fallbackVenue}`;
+    const cleanDate =
+      (eventForm.date || '').trim() || new Date().toISOString().split('T')[0];
 
     const resolvedLocality = (eventForm.locality || '').trim() || 'VIRCH – Trelew, Chubut';
     const resolvedAddress =
@@ -659,9 +653,12 @@ export default function Events() {
   };
 
   const openNewEventModal = () => {
+    setIsNotifyStageModalOpen(false);
+    setQrModalTarget(null);
+    setIsManualAttendeeModalOpen(false);
     const defaultEst = enabledEstablishments[0];
     setEventForm({
-      title: '',
+      title: `Visita Técnica Programada — ${defaultEst ? defaultEst.establishmentName : 'Chacra Experimental PatagonianC'}`,
       subtitle: 'Visita Técnica Programada • Red Cooperativa HempC',
       category: 'visita_programada',
       date: new Date().toISOString().split('T')[0],
@@ -685,7 +682,7 @@ export default function Events() {
       ticketPrefix: 'VISITA-CAMPO',
       weatherWarning:
         'Se reprograma en caso de mal tiempo (Aviso 24 hs antes). Presentar Pase QR y DNI en tranquera.',
-      description: ''
+      description: 'Recorrida técnica guiada por lotes productivos, evaluación fenológica a campo y verificación de protocolos GACP.'
     });
     setQuickCoordsInput(
       defaultEst
@@ -696,6 +693,9 @@ export default function Events() {
   };
 
   const openEditEventModal = (evt: FieldEvent) => {
+    setIsNotifyStageModalOpen(false);
+    setQrModalTarget(null);
+    setIsManualAttendeeModalOpen(false);
     const matchedEst = enabledEstablishments.find(e => e.locationId === evt.locationId);
     const locationIdValue = evt.isCustomLocation
       ? 'OTHER'
@@ -714,6 +714,9 @@ export default function Events() {
 
   // Abrir Modal Oficial de Notificación de Estadio: ACTUALIZACIÓN o SUSPENSIÓN POR CLIMA
   const openNotifyStageModal = (evt: FieldEvent, stage: FieldEventNotificationStage) => {
+    setIsEventModalOpen(false);
+    setQrModalTarget(null);
+    setIsManualAttendeeModalOpen(false);
     const defaultUpdateMsg = `Se han incorporado nuevas actividades técnicas y actualizaciones operativas al cronograma de "${evt.title}" en ${evt.venueName} (${evt.locality}). Su Pase QR personal y las coordenadas GPS de acceso se mantienen vigentes.`;
     const defaultWeatherMsg = `Por condiciones meteorológicas adversas en ${evt.locality} (pronóstico de lluvia / vientos intensos en campo abierto), se informa la suspensión preventiva de las actividades a campo de "${evt.title}" para resguardar la seguridad de los asistentes y el estado de los lotes. Su Pase QR conserva plena validez para la fecha reprogramada.`;
 
@@ -1779,133 +1782,217 @@ export default function Events() {
       )}
 
       {/* =====================================================================
-          MODAL: CREAR / EDITAR EVENTO O VISITA PROGRAMADA
+          MODAL: CREAR / EDITAR EVENTO O VISITA PROGRAMADA (DISEÑO 2 COLUMNAS ACOTADO)
          ===================================================================== */}
       {isEventModalOpen && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full p-6 space-y-5 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+          <form
+            onSubmit={handleSaveEventSubmit}
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl text-xs"
+          >
+            {/* CABECERA FIJA DEL MODAL */}
+            <div className="shrink-0 flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/60">
               <div>
                 <span className="text-[10px] font-mono font-bold uppercase text-[#006633] dark:text-emerald-400">
-                  ADMINISTRACIÓN EXCLUSIVA DE EVENTOS
+                  CONFIGURACIÓN DE AGENDA Y GEORREFERENCIA • CALENDARIO DE EVENTOS
                 </span>
-                <h3 className="text-lg font-black uppercase text-slate-900 dark:text-white">
+                <h3 className="text-base sm:text-lg font-black uppercase text-slate-900 dark:text-white">
                   {eventForm.id ? 'Editar Evento / Visita Programada' : 'Crear Nuevo Evento o Visita de Campo'}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsEventModalOpen(false)}
-                className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 cursor-pointer"
+                title="Cerrar ventana"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveEventSubmit} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div className="sm:col-span-2">
-                  <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
-                    Título del Evento / Jornada / Visita *
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    value={eventForm.title || ''}
-                    onChange={e => setEventForm(p => ({ ...p, title: e.target.value }))}
-                    placeholder="Ej: Visita Programada: Seguimiento de Floración en Lote 2"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
-                  />
-                </div>
+            {/* CUERPO INTERNO CON SCROLL ACOTADO EN 2 COLUMNAS */}
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                {/* COLUMNA IZQUIERDA (6 COLS): DATOS DEL EVENTO, CRONOGRAMA Y PROTOCOLO */}
+                <div className="lg:col-span-6 space-y-3.5">
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="font-black uppercase text-[10px] text-[#006633] dark:text-emerald-400">
+                          1. Título del Evento / Jornada / Visita *
+                        </label>
+                        {eventForm.title && (
+                          <button
+                            type="button"
+                            onClick={() => setEventForm(p => ({ ...p, title: '' }))}
+                            className="text-[10px] font-bold text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
+                          >
+                            Limpiar texto
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        required
+                        type="text"
+                        value={eventForm.title || ''}
+                        onChange={e => setEventForm(p => ({ ...p, title: e.target.value }))}
+                        placeholder="Ej: Visita Programada: Seguimiento de Floración en Lote 2"
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border-2 border-[#006633]/40 focus:border-[#006633] font-black text-slate-900 dark:text-white outline-none"
+                      />
+                    </div>
 
-                <div>
-                  <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
-                    Categoría *
-                  </label>
-                  <select
-                    value={eventForm.category || 'visita_programada'}
-                    onChange={e =>
-                      setEventForm(p => ({
-                        ...p,
-                        category: e.target.value as FieldEventCategory
-                      }))
-                    }
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
-                  >
-                    <option value="jornada_campo">Jornada Oficial de Campo</option>
-                    <option value="visita_programada">Visita Técnica Programada</option>
-                    <option value="diplomatura_practica">Práctica Presencial Diplomatura</option>
-                    <option value="recorrida_institucional">Recorrida Institucional / Auditoría</option>
-                  </select>
-                </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                          Categoría *
+                        </label>
+                        <select
+                          value={eventForm.category || 'visita_programada'}
+                          onChange={e =>
+                            setEventForm(p => ({
+                              ...p,
+                              category: e.target.value as FieldEventCategory
+                            }))
+                          }
+                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+                        >
+                          <option value="jornada_campo">Jornada Oficial de Campo</option>
+                          <option value="visita_programada">Visita Técnica Programada</option>
+                          <option value="diplomatura_practica">Práctica Presencial Diplomatura</option>
+                          <option value="recorrida_institucional">Recorrida Institucional / Auditoría</option>
+                        </select>
+                      </div>
 
-                <div>
-                  <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
-                    Estado de Inscripción *
-                  </label>
-                  <select
-                    value={eventForm.status || 'inscripcion_abierta'}
-                    onChange={e =>
-                      setEventForm(p => ({
-                        ...p,
-                        status: e.target.value as FieldEventStatus
-                      }))
-                    }
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
-                  >
-                    <option value="inscripcion_abierta">Inscripción Abierta</option>
-                    <option value="actualizado_programa">Actualizado (Nuevas Actividades)</option>
-                    <option value="cupo_completo">Cupo Completo</option>
-                    <option value="suspendido_clima">Suspendido por Clima</option>
-                    <option value="reprogramado_clima">Reprogramado por Clima</option>
-                    <option value="en_curso">En Curso Hoy</option>
-                    <option value="finalizado">Jornada Finalizada</option>
-                  </select>
-                </div>
+                      <div>
+                        <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                          Estado del Evento *
+                        </label>
+                        <select
+                          value={eventForm.status || 'inscripcion_abierta'}
+                          onChange={e =>
+                            setEventForm(p => ({
+                              ...p,
+                              status: e.target.value as FieldEventStatus
+                            }))
+                          }
+                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+                        >
+                          <option value="inscripcion_abierta">Inscripción Abierta</option>
+                          <option value="actualizado_programa">Actualizado (Nuevas Actividades)</option>
+                          <option value="cupo_completo">Cupo Completo</option>
+                          <option value="suspendido_clima">Suspendido por Clima</option>
+                          <option value="reprogramado_clima">Reprogramado por Clima</option>
+                          <option value="en_curso">En Curso Hoy</option>
+                          <option value="finalizado">Jornada Finalizada</option>
+                        </select>
+                      </div>
+                    </div>
 
-                <div>
-                  <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
-                    Fecha Programada *
-                  </label>
-                  <input
-                    required
-                    type="date"
-                    value={eventForm.date || ''}
-                    onChange={e => setEventForm(p => ({ ...p, date: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
-                  />
-                </div>
+                    <div className="grid grid-cols-3 gap-2.5">
+                      <div>
+                        <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                          Fecha *
+                        </label>
+                        <input
+                          required
+                          type="date"
+                          value={eventForm.date || ''}
+                          onChange={e => setEventForm(p => ({ ...p, date: e.target.value }))}
+                          className="w-full px-2.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                          Hora Inicio
+                        </label>
+                        <input
+                          type="time"
+                          value={eventForm.startTime || '08:30'}
+                          onChange={e => setEventForm(p => ({ ...p, startTime: e.target.value }))}
+                          className="w-full px-2.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                          Hora Cierre
+                        </label>
+                        <input
+                          type="time"
+                          value={eventForm.endTime || '15:30'}
+                          onChange={e => setEventForm(p => ({ ...p, endTime: e.target.value }))}
+                          className="w-full px-2.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
-                      Hora Inicio
-                    </label>
-                    <input
-                      type="time"
-                      value={eventForm.startTime || '08:30'}
-                      onChange={e => setEventForm(p => ({ ...p, startTime: e.target.value }))}
-                      className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
-                    />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                          Cupo Máximo Asistentes
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={eventForm.maxCapacity || 60}
+                          onChange={e =>
+                            setEventForm(p => ({ ...p, maxCapacity: Number(e.target.value) }))
+                          }
+                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                          Prefijo de Pase QR (Ticket)
+                        </label>
+                        <input
+                          type="text"
+                          value={eventForm.ticketPrefix || ''}
+                          onChange={e =>
+                            setEventForm(p => ({ ...p, ticketPrefix: e.target.value.toUpperCase() }))
+                          }
+                          placeholder="Ej: SIEMBRA-21N"
+                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
-                      Hora Cierre
-                    </label>
-                    <input
-                      type="time"
-                      value={eventForm.endTime || '15:30'}
-                      onChange={e => setEventForm(p => ({ ...p, endTime: e.target.value }))}
-                      className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
-                    />
+
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 space-y-3">
+                    <div>
+                      <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                        Objetivos Técnicos y Protocolo de la Visita / Jornada
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={eventForm.description || ''}
+                        onChange={e => setEventForm(p => ({ ...p, description: e.target.value }))}
+                        placeholder="Detalle del recorrido por lotes, paradas técnicas y requisitos de acreditación..."
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
+                        Indicaciones Viales Paso a Paso (Se adjuntan al Pase QR del asistente) *
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={eventForm.routeInstructions || ''}
+                        onChange={e =>
+                          setEventForm(p => ({ ...p, routeInstructions: e.target.value }))
+                        }
+                        placeholder="Indicaciones viales desde la ruta principal hasta la tranquera de acreditación..."
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
+                      />
+                    </div>
                   </div>
                 </div>
 
-                {/* DESPLEGABLE VINCULADO A TABLA DE ESTABLECIMIENTOS Y CAMPOS HABILITADOS + OPCIÓN OTRO */}
-                <div className="sm:col-span-2 bg-emerald-50/70 dark:bg-emerald-950/30 border-2 border-[#006633]/30 rounded-2xl p-4 space-y-3.5">
+                {/* COLUMNA DERECHA (6 COLS): CAMPO HABILITADO / LOCACIÓN EXTERNA Y GEORREFERENCIA GPS */}
+                <div className="lg:col-span-6 bg-emerald-50/70 dark:bg-emerald-950/30 border-2 border-[#006633]/30 rounded-2xl p-4 space-y-3">
                   <div>
                     <label className="font-black uppercase text-[10px] text-[#006633] dark:text-emerald-400 block mb-1">
-                      Establecimiento del Evento (Campos Habilitados en la Red o Locación Externa) *
+                      2. Establecimiento del Evento (Captar Campo de la Red o Agregar Locación Externa) *
                     </label>
                     <select
                       value={
@@ -1947,21 +2034,28 @@ export default function Events() {
                           setQuickCoordsInput(
                             `${resolved.coordinates.lat}, ${resolved.coordinates.lng}`
                           );
-                          setEventForm(p => ({
-                            ...p,
-                            locationId: resolved.locationId,
-                            clientId: resolved.clientId,
-                            isCustomLocation: false,
-                            venueName: resolved.venueName,
-                            locality: resolved.locality,
-                            address: resolved.address,
-                            coordinates: resolved.coordinates,
-                            routeInstructions: resolved.routeInstructions,
-                            routeWaypoints: resolved.routeWaypoints
-                          }));
+                          setEventForm(p => {
+                            const autoTitle =
+                              !p.title || p.title.startsWith('Visita Técnica Programada —')
+                                ? `Visita Técnica Programada — ${resolved.venueName}`
+                                : p.title;
+                            return {
+                              ...p,
+                              title: autoTitle,
+                              locationId: resolved.locationId,
+                              clientId: resolved.clientId,
+                              isCustomLocation: false,
+                              venueName: resolved.venueName,
+                              locality: resolved.locality,
+                              address: resolved.address,
+                              coordinates: resolved.coordinates,
+                              routeInstructions: resolved.routeInstructions,
+                              routeWaypoints: resolved.routeWaypoints
+                            };
+                          });
                         }
                       }}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-900 border-2 border-[#006633]/50 font-black text-slate-900 dark:text-white"
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border-2 border-[#006633]/50 font-black text-slate-900 dark:text-white"
                     >
                       <optgroup label="Establecimientos y Campos Habilitados en la Red HempC">
                         {enabledEstablishments.map(opt => (
@@ -1979,32 +2073,30 @@ export default function Events() {
                     </select>
                   </div>
 
-                  {/* Datos de Locación y Punto de Encuentro Georreferenciado (Captados del Campo o Personalizados en OTRO) */}
+                  {/* Datos de Locación y Punto de Encuentro Georreferenciado */}
                   <div
-                    className={`rounded-xl p-3.5 space-y-3 border ${
+                    className={`rounded-xl p-3 space-y-2.5 border ${
                       eventForm.isCustomLocation || eventForm.locationId === 'OTHER'
                         ? 'bg-amber-50/80 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800'
                         : 'bg-white dark:bg-slate-900 border-emerald-200 dark:border-emerald-800/70'
                     }`}
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span
-                        className={`text-[10px] font-mono font-black uppercase ${
-                          eventForm.isCustomLocation || eventForm.locationId === 'OTHER'
-                            ? 'text-amber-800 dark:text-amber-300'
-                            : 'text-[#006633] dark:text-emerald-400'
-                        }`}
-                      >
-                        {eventForm.isCustomLocation || eventForm.locationId === 'OTHER'
-                          ? '📍 LOCACIÓN EXTERNA / PERSONALIZADA HABILITADA (OPCIÓN: OTRO)'
-                          : '📍 DATOS CAPTADOS DEL CAMPO HABILITADO (PODÉS AJUSTAR SECTOR O PUNTO DE ENCUENTRO)'}
-                      </span>
-                    </div>
+                    <span
+                      className={`text-[10px] font-mono font-black uppercase block ${
+                        eventForm.isCustomLocation || eventForm.locationId === 'OTHER'
+                          ? 'text-amber-800 dark:text-amber-300'
+                          : 'text-[#006633] dark:text-emerald-400'
+                      }`}
+                    >
+                      {eventForm.isCustomLocation || eventForm.locationId === 'OTHER'
+                        ? '📍 LOCACIÓN EXTERNA / PERSONALIZADA HABILITADA (OPCIÓN: OTRO)'
+                        : '📍 DATOS CAPTADOS DEL CAMPO HABILITADO (PODÉS AJUSTAR SECTOR O ACCESO)'}
+                    </span>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       <div>
                         <label className="font-black uppercase text-[10px] text-slate-600 dark:text-slate-300 block mb-1">
-                          Nombre del Establecimiento / Sede / Sector del Evento *
+                          Sede / Sector del Evento *
                         </label>
                         <input
                           required
@@ -2013,8 +2105,8 @@ export default function Events() {
                           onChange={e =>
                             setEventForm(p => ({ ...p, venueName: e.target.value }))
                           }
-                          placeholder="Ej: Establecimiento La Regina — Sector Lote 2 / Predio Ferial"
-                          className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+                          placeholder="Ej: Establecimiento La Regina — Sector Lote 2"
+                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
                         />
                       </div>
                       <div>
@@ -2029,7 +2121,7 @@ export default function Events() {
                             setEventForm(p => ({ ...p, locality: e.target.value }))
                           }
                           placeholder="Ej: Trelew, Chubut"
-                          className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
                         />
                       </div>
                       <div className="sm:col-span-2">
@@ -2043,15 +2135,15 @@ export default function Events() {
                           onChange={e =>
                             setEventForm(p => ({ ...p, address: e.target.value }))
                           }
-                          placeholder="Ej: Chacra 23 Parcela 13, Ruta Nacional 3 Km 1462 (Tranquera Principal)"
-                          className="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
+                          placeholder="Ej: Chacra 23 Parcela 13, Ruta Nacional 3 Km 1462"
+                          className="w-full px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-bold text-slate-900 dark:text-white"
                         />
                       </div>
                     </div>
                   </div>
 
-                  {/* Coordenadas GPS para el Celular y Ruta Destacada */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Coordenadas GPS */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                     <div>
                       <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
                         Latitud GPS *
@@ -2069,7 +2161,7 @@ export default function Events() {
                             coordinates: { lat, lng }
                           }));
                         }}
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
+                        className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
                       />
                     </div>
                     <div>
@@ -2089,12 +2181,12 @@ export default function Events() {
                             coordinates: { lat, lng }
                           }));
                         }}
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
+                        className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
                       />
                     </div>
                     <div>
                       <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
-                        Pegar Coordenadas Google Maps
+                        Pegar Coordenadas
                       </label>
                       <input
                         type="text"
@@ -2111,27 +2203,12 @@ export default function Events() {
                           }
                         }}
                         placeholder="-43.308362, -65.289033"
-                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono text-xs text-[#006633] dark:text-emerald-400"
+                        className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono text-xs text-[#006633] dark:text-emerald-400"
                       />
                     </div>
                   </div>
 
-                  <div>
-                    <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
-                      Ruta Destacada Paso a Paso (Se envía en el correo de recepción/acreditación y en el Pase QR) *
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={eventForm.routeInstructions || ''}
-                      onChange={e =>
-                        setEventForm(p => ({ ...p, routeInstructions: e.target.value }))
-                      }
-                      placeholder="Indicaciones viales desde la ruta principal hasta la tranquera de acreditación..."
-                      className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-                    />
-                  </div>
-
-                  {/* Vista Previa en Vivo del Mapa con Georreferencia Interactiva por Clic */}
+                  {/* Selector Interactivo en Mapa (Limpio, sin el mensaje de email) */}
                   <EventRouteMapPreview
                     event={eventForm}
                     compact
@@ -2167,69 +2244,49 @@ export default function Events() {
                     }}
                   />
                 </div>
-
-                <div>
-                  <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
-                    Cupo Máximo de Asistentes
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={eventForm.maxCapacity || 60}
-                    onChange={e =>
-                      setEventForm(p => ({ ...p, maxCapacity: Number(e.target.value) }))
-                    }
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
-                    Prefijo de Pase QR (Ticket)
-                  </label>
-                  <input
-                    type="text"
-                    value={eventForm.ticketPrefix || ''}
-                    onChange={e =>
-                      setEventForm(p => ({ ...p, ticketPrefix: e.target.value.toUpperCase() }))
-                    }
-                    placeholder="Ej: SIEMBRA-21N"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono font-bold text-slate-900 dark:text-white"
-                  />
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="font-black uppercase text-[10px] text-slate-500 block mb-1">
-                    Objetivos Técnicos y Protocolo de la Visita / Jornada
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={eventForm.description || ''}
-                    onChange={e => setEventForm(p => ({ ...p, description: e.target.value }))}
-                    placeholder="Detalle del recorrido por lotes, paradas técnicas y requisitos de acreditación..."
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white"
-                  />
-                </div>
               </div>
+            </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+            {/* PIE FIJO DEL MODAL CON ACCIÓN DIRECTA DE GUARDADO */}
+            <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 px-5 sm:px-6 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
+              <div className="text-[11px] font-mono text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                <MapPin size={14} className="text-[#006633]" />
+                <span>
+                  Georreferencia activa:{' '}
+                  <strong>
+                    {(eventForm.coordinates?.lat ?? -43.308362).toFixed(5)},{' '}
+                    {(eventForm.coordinates?.lng ?? -65.289033).toFixed(5)}
+                  </strong>
+                </span>
+              </div>
+              <div className="flex items-center gap-2.5 ml-auto">
                 <button
                   type="button"
                   onClick={() => setIsEventModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-slate-200/70 dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={isSavingEvent}
-                  className="px-6 py-2.5 rounded-xl bg-[#006633] hover:bg-[#004d26] text-white text-xs font-black uppercase tracking-wider cursor-pointer"
+                  className="px-6 py-2.5 rounded-xl bg-[#006633] hover:bg-[#004d26] text-white text-xs font-black uppercase tracking-wider shadow-md flex items-center gap-2 cursor-pointer"
                 >
-                  {isSavingEvent ? 'Guardando...' : 'Guardar en Calendario de EVENTOS'}
+                  {isSavingEvent ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      <span>Guardando Evento...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={15} />
+                      <span>Guardar en Calendario de EVENTOS</span>
+                    </>
+                  )}
                 </button>
               </div>
-            </form>
-          </div>
+            </div>
+          </form>
         </div>
       )}
 
@@ -2237,8 +2294,8 @@ export default function Events() {
           MODAL: ACREDITAR VISITANTE MANUALMENTE DESDE ADMINISTRACIÓN
          ===================================================================== */}
       {isManualAttendeeModalOpen && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-xl w-full p-6 space-y-4 shadow-2xl">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-xl w-full max-h-[92vh] overflow-y-auto p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
               <div>
                 <span className="text-[10px] font-mono font-bold uppercase text-[#006633] dark:text-emerald-400">
@@ -2665,8 +2722,8 @@ export default function Events() {
           2) SUSPENSIÓN / REPROGRAMACIÓN POR CONDICIONES CLIMÁTICAS
          ===================================================================== */}
       {isNotifyStageModalOpen && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full p-6 space-y-5 shadow-2xl my-8">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-6 space-y-5 shadow-2xl">
             <div className="flex items-start justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3.5">
               <div className="flex items-center gap-3">
                 <div
