@@ -538,7 +538,27 @@ export interface Plot {
   actualHarvestYieldKg?: number;     // Rendimiento real cosechado (kg totales en parcela)
   harvestYieldKg?: number;           // Alias de rendimiento real cosechado (kg totales en parcela)
   waterFootprintM3Ha?: number;       // Huella hídrica consolidada al cierre (m³/ha)
+  // MODELO DE DOBLE VARIABLE DE COSECHA (CICLO GENÉTICO TEÓRICO VS. FECHA FINAL DEL PRODUCTOR) & CADENA DE VALOR
+  geneticEstimatedHarvestDate?: string; // Variable 1: Fecha teórica calculada (sowingDate + variety.cycleDays)
+  producerFinalHarvestDate?: string;    // Variable 2: Fecha final real en campo manejada por el Productor (YYYY-MM-DD)
+  harvestDelayReason?: string;          // Motivo agronómico/climático del diferencial entre fecha teórica y real
+  harvestActConfirmedByProducer?: boolean; // Candado de Acta Final de Cosecha confirmada en campo
+  conditioningStage?: HarvestConditioningStage; // Eslabón actual de acondicionamiento post-corte en campo
+  conditioningNotes?: string;           // Observaciones de enriado, secado de grano o limpieza
+  grainMoisturePct?: number;            // % Humedad de grano medida en cosecha/secado
+  rettingStatus?: 'Óptimo (Gris plateado)' | 'Medio (Amarillo tostado)' | 'Verde (Sin enriar)';
+  harvestBaleCount?: number;            // Cantidad de fardos / rollos obtenidos en parcela
+  avgBaleWeightKg?: number;             // Peso promedio por fardo (kg)
+  harvestStoragePointId?: string;       // Almacén / Silo de custodia donde ingresó la cosecha
+  outputSeedBatchIds?: string[];        // IDs de lotes cosechados generados (Grano, Fibra, Biomasa, Cañamiza)
 }
+
+export type HarvestConditioningStage =
+  | 'en_cultivo'             // En ciclo vegetativo / floración previo al corte
+  | 'corte_trilla_programada'// Fecha final de cosecha definida por el Productor
+  | 'en_enriado_secado'      // Acondicionamiento primario en campo (enriado de fibra / secado de grano)
+  | 'lote_generado_almacen'  // Subproductos generados e ingresados a Almacén de Custodia
+  | 'despachado_industria';  // Entregado al siguiente eslabón industrial
 
 export type BiologicalMaterialType = 'seed' | 'harvested_grain' | 'fiber_bales' | 'biomass_cbg' | 'hurds';
 

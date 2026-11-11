@@ -24,6 +24,14 @@ import {
     unpackUserMetaFromPersistence
 } from '../src/utils/structurePermissions.js';
 import {
+    calculatePlotHarvestDates,
+    canUserManageSeedBatches,
+    canUserEditPlotHarvestVariable,
+    packPlotHarvestMetaIntoObservations,
+    unpackPlotHarvestMetaFromObservations,
+    buildHarvestedOutputBatch
+} from '../src/services/harvestValueChainService.js';
+import {
     sanitizePlotInputText,
     canUserEditOrMutatePlot,
     computeDifferentialSeedStockAdjustment,
@@ -1624,6 +1632,97 @@ test("13.7 Auditoría Integral de App Android & Windows (Iconografía Oficial He
     ]);
     const activeSystemUsers = systemUsers.filter(u => u.accountStatus !== 'pending_approval');
     assert.equal(activeSystemUsers.length, DEMO_USERS_LIST.length, 'Solo los usuarios activos de sistema deben auditarse para vínculos de Clientes/Proveedores');
+});
+
+test("13.8 Modelo de Doble Variable de Fecha de Cosecha, Separación de Semillas INASE y Cadena de Valor Post-Cosecha", () => {
+    const adminUser = DEMO_USERS_LIST.find(u => u.role === 'super_admin')!;
+    const producerRicardo = DEMO_USERS_LIST.find(u => u.email === 'ricardo@hempc.com.ar')!;
+    const producerSalvador = DEMO_USERS_LIST.find(u => u.email === 'centroambientalpatagonico@gmail.com')!;
+    const supplierObtentor = DEMO_USERS_LIST.find(u => u.email === 'gblocki@anandapampa.com.ar')!;
+
+    // 1. Separación estricta de permisos de gestión de Semilla INASE vs. Cosecha en Campo
+    assert.equal(canUserManageSeedBatches(adminUser), true, "Los Administradores Centrales gestionan exclusivamente la semilla INASE");
+    assert.equal(canUserManageSeedBatches(producerRicardo), false, "El Productor no puede dar de alta ni modificar lotes de semilla INASE");
+    assert.equal(canUserManageSeedBatches(supplierObtentor), false, "El Proveedor no puede modificar lotes de semilla INASE");
+
+    assert.equal(canAccessRoute(adminUser, '/harvest'), true);
+    assert.equal(canAccessRoute(producerRicardo, '/harvest'), true);
+
+    // 2. Verificar cálculo determinístico de las 2 Variables de Fecha de Cosecha por parcela
+    const plotLaRegina = DEMO_PLOTS.find(p => p.locationId === '1766444697119')!;
+    const variety = DEMO_VARIETIES.find(v => v.id === plotLaRegina.varietyId)!;
+    const baseDates = calculatePlotHarvestDates(
+        { ...plotLaRegina, sowingDate: '2025-11-10', producerFinalHarvestDate: undefined, closedDate: undefined },
+        { ...variety, cycleDays: 140 }
+    );
+    assert.equal(baseDates.geneticEstimatedHarvestDate, '2026-03-30', "Variable 1 debe ser sowingDate + cycleDays (2025-11-10 + 140d = 2026-03-30)");
+    assert.equal(baseDates.producerFinalHarvestDate, '2026-03-30', "Por defecto Variable 2 inicia igual a Variable 1");
+    assert.equal(baseDates.deltaCycleDays, 0);
+
+    // Cuando el Productor ajusta Variable 2 en campo (+6 días por humedad de grano / clima)
+    const adjustedDates = calculatePlotHarvestDates(
+        { ...plotLaRegina, sowingDate: '2025-11-10', producerFinalHarvestDate: '2026-04-05' },
+        { ...variety, cycleDays: 140 }
+    );
+    assert.equal(adjustedDates.geneticEstimatedHarvestDate, '2026-03-30', "Variable 1 permanece inmutable como línea base genética");
+    assert.equal(adjustedDates.producerFinalHarvestDate, '2026-04-05', "Variable 2 refleja la fecha real decidida por el Productor en el campo");
+    assert.equal(adjustedDates.deltaCycleDays, 6, "Diferencial de ciclo debe ser +6 días");
+    assert.ok(adjustedDates.deltaLabel.includes('+6 días'));
+
+    // 3. Permisos de edición de Variable 2 por el Productor y bloqueo post-confirmación del Acta Final
+    const openPlot = { ...plotLaRegina, harvestActConfirmedByProducer: false };
+    assert.equal(canUserEditPlotHarvestVariable(producerRicardo, openPlot, DEMO_LOCATIONS, DEMO_CLIENTS).allowed, true, "El Productor titular puede manejar Variable 2 en las parcelas de su campo");
+    assert.equal(canUserEditPlotHarvestVariable(producerSalvador, openPlot, DEMO_LOCATIONS, DEMO_CLIENTS).allowed, false, "Otro productor aislado no puede editar parcelas ajenas");
+
+    const lockedPlot = { ...plotLaRegina, harvestActConfirmedByProducer: true };
+    assert.equal(canUserEditPlotHarvestVariable(producerRicardo, lockedPlot, DEMO_LOCATIONS, DEMO_CLIENTS).allowed, false, "Una vez confirmada el Acta Final por el Productor, queda bloqueada para edición de campo");
+    assert.equal(canUserEditPlotHarvestVariable(adminUser, lockedPlot, DEMO_LOCATIONS, DEMO_CLIENTS).allowed, true, "El Administrador Central puede auditar o reabrir el Acta Final");
+
+    // 4. Persistencia multi-dispositivo en observations (Supabase)
+    const plotWithHarvestData = {
+        ...plotLaRegina,
+        observations: 'Parcela experimental de alto rinde.',
+        geneticEstimatedHarvestDate: '2026-03-30',
+        producerFinalHarvestDate: '2026-04-05',
+        harvestDelayReason: 'Secado natural en pie a 8.8% humedad',
+        harvestActConfirmedByProducer: true,
+        conditioningStage: 'secado_enriado' as const,
+        grainMoisturePct: 8.8,
+        rettingStatus: 'Óptimo (Gris plateado)',
+        harvestBaleCount: 14,
+        avgBaleWeightKg: 420,
+        harvestedYieldKg: 1850
+    };
+    const packedObs = packPlotHarvestMetaIntoObservations(plotWithHarvestData);
+    assert.ok(packedObs.includes('/*HEMPC_PLOT_META:'), "Debe empaquetar los metadatos de cosecha y cadena de valor");
+    const unpacked = unpackPlotHarvestMetaFromObservations(packedObs);
+    assert.equal(unpacked.cleanObservations, 'Parcela experimental de alto rinde.');
+    assert.equal(unpacked.meta.producerFinalHarvestDate, '2026-04-05');
+    assert.equal(unpacked.meta.harvestActConfirmedByProducer, true);
+    assert.equal(unpacked.meta.grainMoisturePct, 8.8);
+    assert.equal(unpacked.meta.harvestBaleCount, 14);
+
+    // 5. Generación trazable de Lote de Cosecha Obtenido (Etapa 03 de Cadena de Valor)
+    const parentSeed = DEMO_SEED_BATCHES.find(b => b.id === plotLaRegina.seedBatchId) || DEMO_SEED_BATCHES[0];
+    const targetStorage = DEMO_STORAGE_POINTS.find(s => s.id === 'fc1fedd0-1404-47a0-89d3-cc5d774ce848')!;
+    const harvestedBatch = buildHarvestedOutputBatch({
+        plot: plotWithHarvestData,
+        variety,
+        parentSeedBatch: parentSeed,
+        storagePoint: targetStorage,
+        materialType: 'harvested_grain',
+        quantityKg: 1420.5,
+        producerHarvestDate: '2026-04-05',
+        responsibleName: producerRicardo.name,
+        moisturePct: 8.8,
+        oilContentPct: 31.5
+    });
+    assert.equal(harvestedBatch.materialType, 'harvested_grain');
+    assert.equal(harvestedBatch.originPlotId, plotLaRegina.id);
+    assert.equal(harvestedBatch.parentSeedBatchId, parentSeed.id);
+    assert.equal(harvestedBatch.harvestDate, '2026-04-05', "El lote cosechado hereda la Fecha Final del Productor (Variable 2)");
+    assert.equal(harvestedBatch.initialQuantity, 1420.5);
+    assert.equal(harvestedBatch.storagePointId, targetStorage.id);
 });
 
 console.log("\n=================================================");

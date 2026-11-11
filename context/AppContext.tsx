@@ -7,6 +7,12 @@ import {
   HempStageId, AgrochemicalApplication, VaultDocument, FieldEvent
 } from '../types';
 import { DEFAULT_FIELD_EVENTS, isEventOnlyAttendee } from '../src/services/eventsManagementService';
+import {
+  packPlotHarvestMetaIntoObservations,
+  unpackPlotHarvestMetaFromObservations,
+  calculatePlotHarvestDates,
+  canUserEditPlotHarvestVariable
+} from '../src/services/harvestValueChainService';
 import { 
   ADMIN_USER, DEMO_USER, DEMO_USERS_LIST, DEMO_CLIENTS, DEMO_VARIETIES, DEMO_LOCATIONS, DEMO_PLOTS, 
   DEMO_PROJECTS, DEMO_TRIALS, DEMO_HYDRIC, DEMO_TASKS,
@@ -1104,10 +1110,27 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         const demoPlotById = new Map(DEMO_PLOTS.map(dp => [String(dp.id), dp]));
         const demoPlotByName = new Map(DEMO_PLOTS.map(dp => [dp.name.trim().toLowerCase(), dp]));
         const locMap = new Map(DEMO_LOCATIONS.map(l => [String(l.id), l]));
+        const varMap = new Map(DEMO_VARIETIES.map(v => [String(v.id), v]));
+
+        let localPlotMetaMap: Record<string, any> = {};
+        if (typeof window !== 'undefined') {
+            try {
+                const rawMeta = localStorage.getItem('ht_plots_meta_v1');
+                if (rawMeta) localPlotMetaMap = JSON.parse(rawMeta) || {};
+            } catch {}
+        }
 
         const healedPlots: Plot[] = (plotsList || [])
             .filter(p => !deletedSet.has(String(p.id)) && !isPurgedDemoItem(p))
-            .map((p: Plot) => {
+            .map((rawPlot: Plot) => {
+                const { cleanObservations, parsedMeta } = unpackPlotHarvestMetaFromObservations(rawPlot.observations);
+                const localMeta = localPlotMetaMap[String(rawPlot.id)] || {};
+                const p: Plot = {
+                    ...rawPlot,
+                    ...parsedMeta,
+                    ...localMeta,
+                    observations: cleanObservations
+                };
                 const demoMatch = demoPlotById.get(String(p.id)) || (p.name ? demoPlotByName.get(p.name.trim().toLowerCase()) : undefined);
                 const locIdStr = String(p.locationId || demoMatch?.locationId || '');
                 const parentLoc = locMap.get(locIdStr);
@@ -1250,6 +1273,15 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 const deterministicActCode = `ACTA-SIEMBRA-20252026-${plotIdSuffix}`;
 
                 const isReopenedLocally = Boolean((p as any)._localReopened);
+                const varietyObj = varMap.get(String(resolvedVarietyId || p.varietyId || ''));
+                const basePlotForDates: Plot = {
+                    ...(demoMatch || {}),
+                    ...p,
+                    sowingDate: p.sowingDate || demoMatch?.sowingDate || '2025-11-15',
+                    varietyId: resolvedVarietyId || p.varietyId
+                };
+                const dateMetrics = calculatePlotHarvestDates(basePlotForDates, varietyObj);
+
                 return {
                     ...(demoMatch || {}),
                     ...p,
@@ -1273,12 +1305,14 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     sowingResponsibleName: resolvedSower,
                     technicalResponsibleName: resolvedTech,
                     harvestOperator: resolvedHarvester,
+                    geneticEstimatedHarvestDate: dateMetrics.geneticEstimatedHarvestDate,
+                    producerFinalHarvestDate: p.producerFinalHarvestDate || p.scheduledHarvestDate || dateMetrics.producerFinalHarvestDate,
                     status: (isCamp2526 && !isReopenedLocally) ? 'Cosechada' : p.status,
                     campaignStatuses: (isCamp2526 && !isReopenedLocally)
                         ? { ...(p.campaignStatuses || {}), '2025/2026': 'Cosechada' }
                         : p.campaignStatuses,
-                    closedAt: isCamp2526 ? (p.closedAt || '2026-04-01') : p.closedAt,
-                    closedDate: isCamp2526 ? (p.closedDate || '2026-04-01') : p.closedDate,
+                    closedAt: isCamp2526 ? (p.closedAt || p.producerFinalHarvestDate || '2026-04-01') : p.closedAt,
+                    closedDate: isCamp2526 ? (p.closedDate || p.producerFinalHarvestDate || '2026-04-01') : p.closedDate,
                     closedTime: isCamp2526 ? (p.closedTime || '16:00') : p.closedTime,
                     closedBy: isCamp2526 ? (p.closedBy || resolvedTech || 'Gastón BAREA M.') : p.closedBy,
                     closureConfirmed: (isCamp2526 && !isReopenedLocally) ? true : p.closureConfirmed,
@@ -2542,8 +2576,44 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 });
             }
         } else if (table === 'plots') {
+            if (action !== 'delete' && item && typeof item === 'object' && item.id) {
+                try {
+                    const rawMeta = localStorage.getItem('ht_plots_meta_v1');
+                    const metaMap = rawMeta ? JSON.parse(rawMeta) : {};
+                    metaMap[String(item.id)] = {
+                        ...(metaMap[String(item.id)] || {}),
+                        producerFinalHarvestDate: item.producerFinalHarvestDate,
+                        geneticEstimatedHarvestDate: item.geneticEstimatedHarvestDate,
+                        scheduledHarvestDate: item.scheduledHarvestDate,
+                        scheduledHarvestTime: item.scheduledHarvestTime,
+                        isHarvestScheduled: item.isHarvestScheduled,
+                        harvestDelayReason: item.harvestDelayReason,
+                        harvestActConfirmedByProducer: item.harvestActConfirmedByProducer,
+                        conditioningStage: item.conditioningStage,
+                        conditioningNotes: item.conditioningNotes,
+                        grainMoisturePct: item.grainMoisturePct,
+                        rettingStatus: item.rettingStatus,
+                        actualHarvestYieldKg: item.actualHarvestYieldKg,
+                        harvestYieldKg: item.harvestYieldKg,
+                        harvestBaleCount: item.harvestBaleCount,
+                        avgBaleWeightKg: item.avgBaleWeightKg,
+                        harvestMachinery: item.harvestMachinery,
+                        harvestOperator: item.harvestOperator,
+                        harvestStoragePointId: item.harvestStoragePointId,
+                        outputSeedBatchIds: item.outputSeedBatchIds,
+                        closedDate: item.closedDate,
+                        closedTime: item.closedTime,
+                        closedBy: item.closedBy,
+                        closureConfirmed: item.closureConfirmed,
+                        closureActCode: item.closureActCode,
+                        closureBarcode: item.closureBarcode,
+                        closureNotes: item.closureNotes
+                    };
+                    localStorage.setItem('ht_plots_meta_v1', JSON.stringify(metaMap));
+                } catch {}
+            }
             setPlots(prev => {
-                const next = updateList(prev);
+                const next = healPlotsWithSeedBatches(updateList(prev), seedBatches);
                 try { localStorage.setItem('ht_plots', JSON.stringify(next)); } catch (e) {}
                 return next;
             });
@@ -3220,6 +3290,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                         cleanItem.description = packTaskMetaIntoDescription(cleanItem as Task);
                     } else if (table === 'resources') {
                         cleanItem.type = packResourceMetaIntoType(cleanItem as Resource) as any;
+                    } else if (table === 'plots') {
+                        cleanItem.observations = packPlotHarvestMetaIntoObservations(cleanItem.observations, cleanItem as Plot);
                     }
                     const rawPayload = toSnakeCase(cleanItem);
 
@@ -3515,11 +3587,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         const target = plots.find(p => p.id === plotId);
         if (!target) return false;
 
-        // REGLA DE BLOQUEO: Una vez confirmada la fecha de cierre (closureConfirmed o status === 'Cosechada'),
-        // el productor NO puede modificarla; únicamente el Administrador Central puede rectificar.
-        const isAlreadyConfirmed = Boolean(target.closureConfirmed || target.status === 'Cosechada');
-        if (isAlreadyConfirmed && !isCentralAdminOrSupervisor(currentUser)) {
-            console.warn('Candado de seguridad: Solo el Administrador Central puede modificar una fecha de cierre ya confirmada.');
+        // REGLA DE GOBERNANZA DE COSECHA:
+        // El Productor puede ajustar libremente la Fecha Final de Cosecha en Campo (schedule o confirm)
+        // hasta que confirme el Acta Definitiva de Cosecha (`harvestActConfirmedByProducer === true`).
+        // Una vez confirmada el Acta Definitiva, solo el Administrador Central puede rectificarla.
+        const harvestPerm = canUserEditPlotHarvestVariable(currentUser, target, locations, clients);
+        if (!harvestPerm.allowed) {
+            console.warn(harvestPerm.reason || 'Sin permisos para modificar la fecha de cosecha de esta parcela.');
             return false;
         }
 
@@ -3608,18 +3682,23 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
         await crud('tasks', laborPayload, existingLabor ? 'update' : 'insert');
 
-        // Si es programación anticipada, registramos la fecha/hora programada sin bloquear aún el lote como Cosechado
+        // Si es programación / ajuste en campo por el Productor, actualizamos Variable 2 sin bloquear el Acta Final
         if (mode === 'schedule') {
             const scheduledPlot: Plot = {
                 ...target,
                 isHarvestScheduled: true,
+                producerFinalHarvestDate: closedDateIso,
                 scheduledHarvestDate: closedDateIso,
                 scheduledHarvestTime: closedTimeStr,
+                conditioningStage: target.conditioningStage === 'en_cultivo' || !target.conditioningStage
+                    ? 'corte_trilla_programada'
+                    : target.conditioningStage,
                 linkedClosureLaborId: laborId,
                 harvestMachinery: machineryDisplay,
                 harvestOperator: operatorDisplay,
                 closureActCode,
                 closureBarcode,
+                harvestDelayReason: options?.notes || target.harvestDelayReason,
                 closureNotes: options?.notes || target.closureNotes
             };
             const okSched = await crud('plots', scheduledPlot, 'update');
@@ -3629,13 +3708,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 plotId,
                 date: closedDateIso,
                 time: closedTimeStr,
-                note: `📅 PROGRAMACIÓN DE CIERRE DE CICLO / COSECHA (${camp}): Programada para el ${closedDateIso} a las ${closedTimeStr} hs. Vinculada a Labor Agrícola #${laborId}. Operario: ${operatorDisplay}. Maquinaria: ${machineryDisplay}.`
+                note: `📅 FECHA FINAL DE COSECHA EN CAMPO (${camp}): Fijada por ${currentUser?.name || operatorDisplay} para el ${closedDateIso} (${closedTimeStr} hs). Vinculada a Labor Agrícola #${laborId}.`
             };
             await crud('field_logs', schedLog, 'insert');
             return okSched;
         }
 
-        // Modo CONFIRM: Cierre definitivo y homologación del ciclo de siembra
+        // Modo CONFIRM: Cierre definitivo y confirmación del Acta Final de Cosecha
         const nextCampStatuses: Record<string, 'Activa' | 'Pausada' | 'En Barbecho' | 'Cosechada'> = {
             ...(target.campaignStatuses || {}),
             [camp]: 'Cosechada'
@@ -3662,17 +3741,24 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             currentPhenologicalStage: 'BBCH_89_99',
             lastStageUpdateDate: closedDateIso,
             campaignStatuses: nextCampStatuses,
+            producerFinalHarvestDate: closedDateIso,
             closedAt: closedDateIso,
             closedDate: closedDateIso,
             closedTime: closedTimeStr,
             closedBy: currentUser?.name || 'Dirección Técnica',
             closureConfirmed: true,
+            harvestActConfirmedByProducer: true,
+            conditioningStage:
+                target.conditioningStage && target.conditioningStage !== 'en_cultivo' && target.conditioningStage !== 'corte_trilla_programada'
+                    ? target.conditioningStage
+                    : 'en_enriado_secado',
             closureActCode,
             closureBarcode,
             isHarvestScheduled: false,
             linkedClosureLaborId: laborId,
             harvestMachinery: machineryDisplay,
             harvestOperator: operatorDisplay,
+            harvestDelayReason: options?.notes || target.harvestDelayReason,
             closureNotes: options?.notes || 'Ciclo de siembra finalizado, cosechado y homologado.',
             actualHarvestYieldKg:
                 options?.harvestYieldKg !== undefined ? Number(options.harvestYieldKg) : target.actualHarvestYieldKg,
@@ -3726,10 +3812,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             ...target,
             status: 'Activa',
             closureConfirmed: false,
+            harvestActConfirmedByProducer: false,
+            conditioningStage: 'corte_trilla_programada',
             campaign: camp,
             activeCampaigns: activeCampaignsList,
             campaignStatuses: nextCampStatuses
         };
+        (updatedPlot as any)._localReopened = true;
         return await crud('plots', updatedPlot, 'update');
     };
 

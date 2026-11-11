@@ -21,6 +21,7 @@ import Settings from './pages/Settings';
 import CalendarPage from './pages/Calendar';
 import AIAdvisor from './pages/AIAdvisor';
 import SeedBatches from './pages/SeedBatches';
+import HarvestValueChain from './pages/HarvestValueChain';
 import Suppliers from './pages/Suppliers'; 
 import Clients from './pages/Clients'; 
 import Resources from './pages/Resources'; 
@@ -49,7 +50,7 @@ const ProtectedRoute = ({ children }: { children?: React.ReactNode }) => {
 };
 
 const RoleRoute = ({ routePath, children }: { routePath: string; children: React.ReactNode }) => {
-  const { currentUser } = useAppContext();
+  const currentUser = useAppContext().currentUser;
   if (!currentUser || !canAccessRoute(currentUser, routePath)) {
     return <Navigate to="/" replace />;
   }
@@ -95,6 +96,7 @@ export default function App() {
                   <Route path="/storage" element={<Storage />} />
                   <Route path="/logistics-map" element={<LogisticsMap />} />
                   <Route path="/seed-batches" element={<SeedBatches />} />
+                  <Route path="/harvest" element={<HarvestValueChain />} />
                   <Route path="/locations" element={<Locations />} />
                   <Route path="/locations/:id" element={<LocationDetails />} />
                   <Route path="/plots" element={<Plots />} />
@@ -112,4 +114,4 @@ export default function App() {
     </AppProvider>
   );
 }
-/* deploy-trigger: v7.46.0-stable */
+/* deploy-trigger: v7.48.0-stable */

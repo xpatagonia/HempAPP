@@ -8,7 +8,7 @@ import {
   FolderKanban, CheckSquare, BarChart3, Warehouse, Package, X, Bell, Globe, Building, ShieldAlert, FileText, BrainCircuit, Satellite,
   PanelLeftClose, PanelLeftOpen, ShieldCheck, DollarSign,
   Calculator, Truck, UserCheck, ClipboardList, Archive,
-  ChevronDown, ChevronRight, Search, Megaphone, Compass
+  ChevronDown, ChevronRight, Search, Megaphone, Compass, Scale
 } from 'lucide-react';
 import NotificationCenterModal from './NotificationCenterModal';
 import SeedingProtocolModal from './SeedingProtocolModal';
@@ -221,10 +221,11 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
     },
     {
       id: 'logistica',
-      title: 'Trazabilidad & Logística',
+      title: 'Trazabilidad & Cadena de Valor',
       items: [
         { to: '/logistics-map', icon: Globe, label: 'Torre de Control' },
-        { to: '/seed-batches', icon: Package, label: 'Semillas & Cosecha' },
+        { to: '/seed-batches', icon: Package, label: 'Semillas & Logística INASE' },
+        { to: '/harvest', icon: Scale, label: 'Cosecha & Cadena de Valor', special: true },
         { to: '/storage', icon: Warehouse, label: 'Almacenes & Custodia' },
         ...(isAdminUser ? [{ to: '/resources', icon: Archive, label: 'Insumos & Inventario' }] : []),
         { to: '/varieties', icon: BookOpen, label: 'Banco Genético' },

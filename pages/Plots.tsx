@@ -31,6 +31,7 @@ import {
 } from '../src/utils/plotManagementUtils';
 import { DateInputAr } from '../src/components/DateInputAr';
 import { formatDateAr } from '../src/utils/dateFormat';
+import { calculatePlotHarvestDates } from '../src/services/harvestValueChainService';
 
 // Algoritmo de cálculo de área geodésica
 const calculateGeodesicArea = (latLngs: { lat: number, lng: number }[]) => {
@@ -893,6 +894,16 @@ export default function Plots() {
             </div>
 
             <button
+              onClick={() => navigate('/harvest')}
+              className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-sm flex items-center gap-2 cursor-pointer"
+              title="Abrir módulo de Cosecha (Doble Fecha: Ciclo Genético vs. Productor) y Cadena de Valor Post-Cosecha"
+            >
+              <Scale size={15} />
+              <span className="hidden sm:inline">Cosecha & Cadena de Valor</span>
+              <span className="sm:hidden">Cosecha</span>
+            </button>
+
+            <button
               onClick={() => setIsProtocolModalOpen(true)}
               className="px-4 py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-sm flex items-center gap-2"
               title="Consultar y Descargar Protocolo Técnico de Siembra Oficial (Anexo II - PDF)"
@@ -1264,32 +1275,30 @@ export default function Plots() {
                         className="px-5 py-4"
                         onClick={e => {
                           e.stopPropagation();
-                          setSelectedPlotForClosureModal(p);
+                          navigate(`/harvest?plotId=${p.id}`);
                         }}
                       >
-                        <div className="flex items-center gap-2.5">
-                          <div className="space-y-0.5">
-                            {isClosed ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 text-[10px] font-black uppercase">
-                                <Lock size={10} /> {formatDateAr(p.closedDate || p.closedAt || '2026-04-01')} {p.closedTime || ''}
-                              </span>
-                            ) : p.isHarvestScheduled && p.scheduledHarvestDate ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-950/70 text-sky-800 dark:text-sky-300 text-[10px] font-bold uppercase">
-                                <Clock size={10} /> Prog: {formatDateAr(p.scheduledHarvestDate)}
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block">
-                                En curso · {plotLabors.length} Labores
-                              </span>
-                            )}
-                            <span className="text-[9px] text-slate-400 block">
-                              {actCode}
-                            </span>
-                          </div>
-                          <div className="bg-white px-1.5 py-0.5 rounded border border-slate-200 shrink-0 hidden xl:block">
-                            <BarcodeSVG value={barcodeVal} height={18} barWidth={0.85} showText={false} />
-                          </div>
-                        </div>
+                        {(() => {
+                          const hDates = calculatePlotHarvestDates(p, vari);
+                          return (
+                            <div className="flex items-center gap-2.5">
+                              <div className="space-y-0.5">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[9.5px] font-bold">
+                                  Var.1 Genética ({hDates.cycleDays}d): {formatDateAr(hDates.geneticEstimatedHarvestDate)}
+                                </span>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 text-[10px] font-black uppercase">
+                                  <Scale size={10} /> Var.2 Productor: {formatDateAr(hDates.producerFinalHarvestDate)} ({hDates.deltaLabel})
+                                </span>
+                                <span className="text-[9px] text-slate-400 block">
+                                  {actCode}
+                                </span>
+                              </div>
+                              <div className="bg-white px-1.5 py-0.5 rounded border border-slate-200 shrink-0 hidden xl:block">
+                                <BarcodeSVG value={barcodeVal} height={18} barWidth={0.85} showText={false} />
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       <td className="px-5 py-4 text-right font-mono text-xs">
@@ -1575,6 +1584,37 @@ export default function Plots() {
                             {plotLabors.length} Labores
                           </span>
                         </div>
+
+                        {(() => {
+                          const hDates = calculatePlotHarvestDates(p, vari);
+                          return (
+                            <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-slate-200/70 dark:border-slate-800">
+                              <div className="p-1.5 rounded-lg bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-800/60">
+                                <span className="text-[8px] font-black uppercase text-blue-700 dark:text-blue-300 block">
+                                  Var. 1 · Ciclo Genético ({hDates.cycleDays}d)
+                                </span>
+                                <strong className="text-[10px] text-slate-900 dark:text-white block">
+                                  {formatDateAr(hDates.geneticEstimatedHarvestDate)}
+                                </strong>
+                              </div>
+                              <div
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  navigate(`/harvest?plotId=${p.id}`);
+                                }}
+                                className="p-1.5 rounded-lg bg-amber-50/90 dark:bg-amber-950/50 border border-amber-300/80 dark:border-amber-700 hover:bg-amber-100/80 transition cursor-pointer"
+                                title="Clic para gestionar Variable 2 (Fecha Final de Cosecha del Productor) en Cosecha & Cadena de Valor"
+                              >
+                                <span className="text-[8px] font-black uppercase text-amber-800 dark:text-amber-300 block">
+                                  Var. 2 · Final Productor ({hDates.deltaLabel})
+                                </span>
+                                <strong className="text-[10px] text-amber-900 dark:text-amber-200 block">
+                                  {formatDateAr(hDates.producerFinalHarvestDate)} ➔
+                                </strong>
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0 space-y-0.5">

@@ -61,7 +61,7 @@ export default function SeedBatches() {
   
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<'inventory' | 'logistics' | 'inspections'>((searchParams.get('tab') as any) || 'inventory');
-  const [materialFilter, setMaterialFilter] = useState<string>('all');
+  const [materialFilter, setMaterialFilter] = useState<string>(searchParams.get('material') || 'seed');
   const [viewMode, setViewMode] = useState<'batches' | 'warehouses'>('batches');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -851,7 +851,7 @@ export default function SeedBatches() {
 
   const handleSaveCoopQaAndActivate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!qaModalBatch) return;
+    if (!isAdmin || !qaModalBatch) return;
     if (!qaFormDraft.varietyId) {
       alert('Por favor seleccione la Genética / Cultivar que pasó la inspección.');
       return;
@@ -964,6 +964,7 @@ export default function SeedBatches() {
 
   const handleCreateInlineActa = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (!isAdmin) return;
     if (!newActaDraft.varietyId || !newActaDraft.lotNumber.trim()) {
       alert('Por favor seleccione la Genética inspeccionada e indique el N° de Lote / Acta.');
       return;
@@ -1040,6 +1041,7 @@ export default function SeedBatches() {
 
   const handleBatchSubmit = async (e: React.FormEvent, openQaModalAfterSave = false) => {
       e.preventDefault();
+      if (!isAdmin) return;
       const isSeedMaterial = (batchFormData.materialType || 'seed') === 'seed';
       if (!batchFormData.varietyId || !batchFormData.batchCode || !batchFormData.storagePointId || (calculatedEntryKg <= 0.000001 && !editingBatchId) || isSubmitting) {
           alert("Por favor complete: 1) Proveedor y Galpón de Almacenamiento, 2) Variedad Genética, Fecha de Alta y Vencimiento, Código de Lote y Masa mayor a 0.");
@@ -1151,6 +1153,7 @@ export default function SeedBatches() {
 
   const handleMoveSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
+      if (!isAdmin) return;
       if (!moveFormData.batchId || !moveFormData.targetLocationId || calculatedMoveKg <= 0.000001 || isSubmitting) {
           alert("Por favor complete los datos obligatorios del despacho (Lote Origen, Depósito Destino, Masa y N° de Guía).");
           return;
@@ -1299,25 +1302,35 @@ export default function SeedBatches() {
   return (
     <div className="animate-in fade-in duration-500 space-y-6 pb-20">
       
-      {/* HEADER DE INVENTARIO BIOLÓGICO */}
+      {/* HEADER DE SEMILLAS FISCALIZADAS INASE & LOGÍSTICA */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-sm font-mono">
         <div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-mono font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
-                Cadena de Custodia & Almacenamiento
+                Gestión Exclusiva Administración Central · Semillas INASE & Remitos
               </span>
-              <span className="text-xs font-mono text-slate-400">· INASE / GACP / SENASA</span>
+              <span className="text-xs font-mono text-slate-400">· INASE / ISTA / ARICCAME</span>
             </div>
             <h1 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight mt-1 flex items-center gap-2.5">
               <Package className="text-emerald-500" size={28}/> 
-              <span>Inventario Biológico & Derivados Industriales</span>
+              <span>Semillas Fiscalizadas INASE & Logística</span>
             </h1>
             <p className="text-xs text-slate-500 font-mono mt-0.5">
-              Trazabilidad integral: 1° Ingreso a Galpón con PG Obtentor ➔ 2° Variedad Genética y Vto. Manual (1 Año) ➔ 3° PG Cooperativa QA + Acta = Stock Activo.
+              Toda la gestión de la semilla (alta de lotes, QA ISTA y guías de despacho) la realizan los Administradores Centrales. La Cosecha (con sus 2 variables de fecha) y las etapas de Cadena de Valor se operan en su módulo dedicado.
             </p>
         </div>
-        {isAdmin && (
-          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          <button
+            type="button"
+            onClick={() => navigate('/harvest')}
+            className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2.5 rounded-2xl flex items-center justify-center transition shadow font-mono font-bold text-xs uppercase tracking-wider gap-1.5 cursor-pointer"
+            title="Abrir el módulo dedicado de Cosecha (2 Variables de Fecha) & Cadena de Valor Post-Cosecha"
+          >
+            <Scale size={15} />
+            <span>Ir a Cosecha & Cadena de Valor</span>
+          </button>
+          {isAdmin && (
+            <>
               <button 
                 type="button"
                 onClick={() => navigate('/suppliers?tab=inspections&newInspection=1')} 
@@ -1342,7 +1355,7 @@ export default function SeedBatches() {
                 className="bg-sky-600 text-white px-4 py-2.5 rounded-2xl flex items-center justify-center hover:bg-sky-500 transition shadow font-mono font-bold text-xs uppercase tracking-wider gap-1.5"
               >
                 <ArrowUpRight size={15} /> 
-                <span>Despachar Carga</span>
+                <span>Despachar Semilla</span>
               </button>
               <button 
                 type="button"
@@ -1379,10 +1392,11 @@ export default function SeedBatches() {
                 className="bg-emerald-600 text-white px-4 py-2.5 rounded-2xl flex items-center justify-center hover:bg-emerald-500 transition shadow font-mono font-bold text-xs uppercase tracking-wider gap-1.5"
               >
                 <Plus size={15} /> 
-                <span>Nuevo Lote Biológico</span>
+                <span>Nuevo Lote Semilla</span>
               </button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* AVISO DE PERMISOS PARA USUARIOS DE CAMPO / ESTRUCTURA (SOLO VISUALIZACIÓN Y DESCARGA DOCUMENTAL) */}
