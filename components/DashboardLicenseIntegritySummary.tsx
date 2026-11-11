@@ -85,6 +85,7 @@ export default function DashboardLicenseIntegritySummary() {
     plots, locations, seedBatches, trialRecords, 
     varieties, suppliers, currentUser, refreshData, updatePlot 
   } = useAppContext();
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
 
   const [selectedLicense, setSelectedLicense] = useState<LicenseDetail | null>(null);
   const [showIntegrityDetails, setShowIntegrityDetails] = useState(false);
@@ -321,13 +322,15 @@ export default function DashboardLicenseIntegritySummary() {
               <span>Acta de Licencias ARICCAME</span>
             </button>
 
-            <Link
-              to="/integrity"
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            >
-              <span>Auditoría DB</span>
-              <ChevronRight size={14} />
-            </Link>
+            {isAdmin && (
+              <Link
+                to="/integrity"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <span>Auditoría DB</span>
+                <ChevronRight size={14} />
+              </Link>
+            )}
           </div>
         </div>
 
@@ -588,12 +591,14 @@ export default function DashboardLicenseIntegritySummary() {
                 <ChevronRight size={13} className={`transform transition-transform ${showIntegrityDetails ? 'rotate-90' : ''}`} />
               </button>
 
-              <Link
-                to="/integrity"
-                className="text-[10px] font-mono text-slate-400 hover:text-white flex items-center gap-1 underline underline-offset-2"
-              >
-                Centro de Integridad
-              </Link>
+              {isAdmin && (
+                <Link
+                  to="/integrity"
+                  className="text-[10px] font-mono text-slate-400 hover:text-white flex items-center gap-1 underline underline-offset-2"
+                >
+                  Centro de Integridad
+                </Link>
+              )}
             </div>
           </div>
         </div>

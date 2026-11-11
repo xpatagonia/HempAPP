@@ -226,7 +226,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         { to: '/logistics-map', icon: Globe, label: 'Torre de Control' },
         { to: '/seed-batches', icon: Package, label: 'Semillas & Cosecha' },
         { to: '/storage', icon: Warehouse, label: 'Almacenes & Custodia' },
-        { to: '/resources', icon: Archive, label: 'Insumos & Inventario' },
+        ...(isAdminUser ? [{ to: '/resources', icon: Archive, label: 'Insumos & Inventario' }] : []),
         { to: '/varieties', icon: BookOpen, label: 'Banco Genético' },
         ...(isSupplierUser
           ? [{ to: '/suppliers', icon: Truck, label: 'Mi Semillero / Proveedor' }]
@@ -245,7 +245,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
         { to: '/documents', icon: FileText, label: 'Documentos & Legajos', special: true },
         ...(!isSupplierUser ? [{ to: '/finances', icon: DollarSign, label: 'Costos & Finanzas' }] : []),
         { to: '/analytics', icon: BarChart3, label: 'Comparativa Genética' },
-        { to: '/integrity', icon: ShieldAlert, label: 'Integridad & Licencias' },
+        ...(isAdminUser ? [{ to: '/integrity', icon: ShieldAlert, label: 'Integridad & Licencias' }] : []),
         ...(isAdminUser ? [{ to: '/users', icon: UserCheck, label: 'Admin & Accesos' }] : []),
         ...(isAdminUser
           ? [{

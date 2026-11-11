@@ -29,7 +29,8 @@ export default function Resources() {
     addResource,
     updateResource,
     deleteResource,
-    currentUser
+    currentUser,
+    impersonatingAdmin
   } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -77,7 +78,8 @@ export default function Resources() {
     notes: ''
   });
 
-  const canManage = currentUser?.role !== 'viewer';
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+  const canManage = isAdmin;
 
   const filteredResources = useMemo(() => {
     return resources.filter(r => {
@@ -233,6 +235,22 @@ export default function Resources() {
 
   const inputClass =
     'w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500';
+
+  if (!isAdmin && !impersonatingAdmin) {
+    return (
+      <div className="max-w-xl mx-auto my-16 p-8 rounded-3xl bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/50 text-center space-y-4 shadow-lg">
+        <div className="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto">
+          <ShieldCheck size={24} />
+        </div>
+        <h2 className="text-lg font-black uppercase text-slate-900 dark:text-white">
+          Módulo Exclusivo de Administración Central
+        </h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          El catálogo maestro de <strong>Insumos & Inventario SENASA</strong> es administrado exclusivamente por los Administradores Centrales de la Cooperativa.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 animate-in fade-in duration-300 max-w-[1600px] mx-auto pb-12">

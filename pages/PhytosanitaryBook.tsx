@@ -960,22 +960,24 @@ export default function PhytosanitaryBook() {
                       2. Insumo Recepcionado de Proveedor Homologado ({prescribedResourcesForCategory.length} en catálogo):
                     </span>
                   </span>
-                  <div className="flex items-center gap-2">
-                    <Link
-                      to="/suppliers"
-                      className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 hover:underline flex items-center gap-1"
-                    >
-                      <Building2 size={11} />
-                      <span>Proveedores ({suppliers.length})</span>
-                    </Link>
-                    <Link
-                      to="/resources"
-                      className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-300 hover:underline flex items-center gap-1"
-                    >
-                      <span>+ Alta en Insumos e Inventario</span>
-                      <ArrowUpRight size={12} />
-                    </Link>
-                  </div>
+                  {(currentUser?.role === 'admin' || currentUser?.role === 'super_admin') && (
+                    <div className="flex items-center gap-2">
+                      <Link
+                        to="/suppliers"
+                        className="text-[10px] font-mono font-bold text-slate-600 dark:text-slate-300 hover:underline flex items-center gap-1"
+                      >
+                        <Building2 size={11} />
+                        <span>Proveedores ({suppliers.length})</span>
+                      </Link>
+                      <Link
+                        to="/resources"
+                        className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-300 hover:underline flex items-center gap-1"
+                      >
+                        <span>+ Alta en Insumos e Inventario</span>
+                        <ArrowUpRight size={12} />
+                      </Link>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-36 overflow-y-auto pr-1">

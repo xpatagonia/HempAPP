@@ -1463,6 +1463,8 @@ test("13.6 Auditoría Exhaustiva de los 11 Operadores del Sistema, Solicitudes P
 
         assert.equal(canAccessRoute(user, '/users'), exp.canUsersRoute, `Acceso de ${user.name} a /users`);
         assert.equal(canAccessRoute(user, '/events'), exp.canEventsRoute, `Acceso de ${user.name} a /events`);
+        assert.equal(canAccessRoute(user, '/resources'), exp.isCentralAdmin, `Acceso exclusivo Admin de ${user.name} a /resources (Insumos & Inventario)`);
+        assert.equal(canAccessRoute(user, '/integrity'), exp.isCentralAdmin, `Acceso exclusivo Admin de ${user.name} a /integrity (Integridad & Licencias)`);
         assert.equal(canAccessRoute(user, '/settings'), exp.canSettingsRoute, `Acceso de ${user.name} a /settings`);
         assert.equal(canAccessRoute(user, '/finances'), exp.canFinancesRoute, `Acceso de ${user.name} a /finances`);
         assert.equal(canAccessRoute(user, '/clients'), exp.canClientsRoute, `Acceso de ${user.name} a /clients`);
@@ -1496,6 +1498,8 @@ test("13.6 Auditoría Exhaustiva de los 11 Operadores del Sistema, Solicitudes P
     assert.equal(isBlockedOrNonSystemUser(pendingApplicant), true);
     assert.equal(hasGlobalReadScope(pendingApplicant), false);
     assert.equal(canAccessRoute(pendingApplicant, '/'), false);
+    assert.equal(canAccessRoute(pendingApplicant, '/resources'), false);
+    assert.equal(canAccessRoute(pendingApplicant, '/integrity'), false);
     assert.equal(DEMO_PLOTS.filter(p => canAccessPlot(pendingApplicant, p, DEMO_LOCATIONS, DEMO_CLIENTS)).length, 0);
 
     const eventVisitor = createEventRegistrationRecord({
@@ -1509,6 +1513,8 @@ test("13.6 Auditoría Exhaustiva de los 11 Operadores del Sistema, Solicitudes P
     assert.equal(isBlockedOrNonSystemUser(eventVisitor), true);
     assert.equal(hasGlobalReadScope(eventVisitor), false, "Un visitante de evento con role='viewer' jamás debe recibir hasGlobalReadScope");
     assert.equal(canAccessRoute(eventVisitor, '/'), false);
+    assert.equal(canAccessRoute(eventVisitor, '/resources'), false);
+    assert.equal(canAccessRoute(eventVisitor, '/integrity'), false);
     assert.equal(DEMO_PLOTS.filter(p => canAccessPlot(eventVisitor, p, DEMO_LOCATIONS, DEMO_CLIENTS)).length, 0);
 });
 

@@ -92,9 +92,12 @@ export default function ProducerStepAssistantModal({
     currentUser?.organizationName ||
     'Establecimiento Asociado HempC';
 
+  const isAdminUser =
+    currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+
   const handleGoToRoute = (route: string) => {
     onClose();
-    navigate(route);
+    navigate(!isAdminUser && route === '/resources' ? '/tools' : route);
   };
 
   const handleDownloadPdf = () => {

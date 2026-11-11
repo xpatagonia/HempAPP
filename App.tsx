@@ -86,12 +86,12 @@ export default function App() {
                   <Route path="/finances" element={<RoleRoute routePath="/finances"><FinancialReports /></RoleRoute>} />
                   <Route path="/documents" element={<DocumentsVault />} />
                   <Route path="/analytics" element={<Analytics />} />
-                  <Route path="/integrity" element={<IntegrityCheck />} />
+                  <Route path="/integrity" element={<RoleRoute routePath="/integrity"><IntegrityCheck /></RoleRoute>} />
                   <Route path="/advisor" element={<AIAdvisor />} />
                   <Route path="/varieties" element={<Varieties />} />
                   <Route path="/suppliers" element={<RoleRoute routePath="/suppliers"><Suppliers /></RoleRoute>} />
                   <Route path="/clients" element={<RoleRoute routePath="/clients"><Clients /></RoleRoute>} />
-                  <Route path="/resources" element={<Resources />} />
+                  <Route path="/resources" element={<RoleRoute routePath="/resources"><Resources /></RoleRoute>} />
                   <Route path="/storage" element={<Storage />} />
                   <Route path="/logistics-map" element={<LogisticsMap />} />
                   <Route path="/seed-batches" element={<SeedBatches />} />
@@ -112,4 +112,4 @@ export default function App() {
     </AppProvider>
   );
 }
-/* deploy-trigger: v7.44.0-stable */
+/* deploy-trigger: v7.45.0-stable */

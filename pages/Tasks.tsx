@@ -1570,21 +1570,23 @@ export default function Tasks() {
                           Circuito Fitosanitario Obligatorio SENASA • Prohibido Aplicar Insumos No Catalogados
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Link
-                          to="/suppliers"
-                          className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 flex items-center gap-1"
-                        >
-                          <Building2 size={11} /> 1. Proveedores ({suppliers.length})
-                        </Link>
-                        <Link
-                          to="/resources"
-                          className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold hover:bg-emerald-700 flex items-center gap-1"
-                        >
-                          <Package size={11} /> 2. Insumos e Inventario ({catalogInputResources.length})
-                          <ArrowUpRight size={11} />
-                        </Link>
-                      </div>
+                      {isAdmin && (
+                        <div className="flex items-center gap-2">
+                          <Link
+                            to="/suppliers"
+                            className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 flex items-center gap-1"
+                          >
+                            <Building2 size={11} /> 1. Proveedores ({suppliers.length})
+                          </Link>
+                          <Link
+                            to="/resources"
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold hover:bg-emerald-700 flex items-center gap-1"
+                          >
+                            <Package size={11} /> 2. Insumos e Inventario ({catalogInputResources.length})
+                            <ArrowUpRight size={11} />
+                          </Link>
+                        </div>
+                      )}
                     </div>
                     <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
                       Todo producto fitosanitario, bioinsumo o fertilizante aplicado en campo debe seleccionarse del <strong>Catálogo de Insumos e Inventario</strong> (vinculado a un <strong>Proveedor Homologado</strong>). Al ejecutar la labor, se descuenta del stock de galpón y se asienta automáticamente en el <strong>Cuaderno Fitosanitario Oficial</strong>.
@@ -1621,14 +1623,16 @@ export default function Tasks() {
                       <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200 flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
                           <AlertTriangle size={18} className="text-amber-600 shrink-0" />
-                          <span>No hay insumos dados de alta en Insumos e Inventario. Primero registre el Proveedor y el Insumo con su N° SENASA y Lote.</span>
+                          <span>No hay insumos dados de alta en el catálogo oficial. Solicite al Administrador Central el alta del Insumo con su N° SENASA y Lote.</span>
                         </div>
-                        <Link
-                          to="/resources"
-                          className="px-3 py-1.5 bg-amber-600 text-white rounded-lg font-bold text-[11px] shrink-0 hover:bg-amber-700"
-                        >
-                          Ir a Insumos e Inventario
-                        </Link>
+                        {isAdmin && (
+                          <Link
+                            to="/resources"
+                            className="px-3 py-1.5 bg-amber-600 text-white rounded-lg font-bold text-[11px] shrink-0 hover:bg-amber-700"
+                          >
+                            Ir a Insumos e Inventario
+                          </Link>
+                        )}
                       </div>
                     ) : (
                       <>

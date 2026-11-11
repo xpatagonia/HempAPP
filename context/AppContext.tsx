@@ -4079,7 +4079,28 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             suppliers, addSupplier: async (s) => { const ok = await crud('suppliers', s, 'insert'); return ok ? s.id : null; }, updateSupplier: (s) => crud('suppliers', s, 'update'), deleteSupplier: deleteSupplierSafe,
             seedBatches: scopedSeedBatches, addSeedBatch: (b) => crud('seed_batches', b, 'insert'), updateSeedBatch: (b) => crud('seed_batches', b, 'update'), deleteSeedBatch: deleteSeedBatchSafe,
             seedMovements: scopedSeedMovements, addSeedMovement: (m) => crud('seed_movements', m, 'insert'), updateSeedMovement: (m) => crud('seed_movements', m, 'update'), deleteSeedMovement: deleteSeedMovementSafe,
-            resources, addResource: (r) => crud('resources', r, 'insert'), updateResource: (r) => crud('resources', r, 'update'), deleteResource: (id) => crud('resources', id, 'delete'),
+            resources,
+            addResource: async (r) => {
+                if (!isCentralAdminOrSupervisor(impersonatingAdmin || currentUser)) {
+                    console.warn('Seguridad RBAC: Solo Administradores pueden dar de alta en Insumos e Inventario.');
+                    return false;
+                }
+                return crud('resources', r, 'insert');
+            },
+            updateResource: async (r) => {
+                if (!isCentralAdminOrSupervisor(impersonatingAdmin || currentUser)) {
+                    console.warn('Seguridad RBAC: Solo Administradores pueden editar Insumos e Inventario.');
+                    return false;
+                }
+                return crud('resources', r, 'update');
+            },
+            deleteResource: async (id) => {
+                if (!isCentralAdminOrSupervisor(impersonatingAdmin || currentUser)) {
+                    console.warn('Seguridad RBAC: Solo Administradores pueden eliminar de Insumos e Inventario.');
+                    return false;
+                }
+                return crud('resources', id, 'delete');
+            },
             operationalExpenses: scopedOperationalExpenses,
             addOperationalExpense: (exp) => crud('operational_expenses', exp, 'insert'),
             updateOperationalExpense: (exp) => crud('operational_expenses', exp, 'update'),

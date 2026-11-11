@@ -157,7 +157,13 @@ export default function ProducerGuide() {
 
             <button
               type="button"
-              onClick={() => navigate(readiness.nextRecommendedStep.primaryRoute)}
+              onClick={() =>
+                navigate(
+                  !isAdminUser && readiness.nextRecommendedStep.primaryRoute === '/resources'
+                    ? '/tools'
+                    : readiness.nextRecommendedStep.primaryRoute
+                )
+              }
               className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-2 transition cursor-pointer whitespace-nowrap"
             >
               <span>Continuar en Paso {readiness.nextRecommendedStep.number}: {readiness.nextRecommendedStep.shortTitle}</span>
@@ -421,10 +427,14 @@ export default function ProducerGuide() {
                   </Link>
                 )}
                 <Link
-                  to={activeStep.primaryRoute}
+                  to={!isAdminUser && activeStep.primaryRoute === '/resources' ? '/tools' : activeStep.primaryRoute}
                   className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 whitespace-nowrap"
                 >
-                  <span>{activeStep.primaryCtaLabel}</span>
+                  <span>
+                    {!isAdminUser && activeStep.primaryRoute === '/resources'
+                      ? 'Calculadora de Dosis (/tools)'
+                      : activeStep.primaryCtaLabel}
+                  </span>
                   <ArrowRight size={14} />
                 </Link>
               </div>
@@ -623,12 +633,21 @@ export default function ProducerGuide() {
                 </h3>
               </div>
               <div className="flex items-center gap-2">
-                <Link
-                  to="/resources"
-                  className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
-                >
-                  Ir a Insumos (/resources)
-                </Link>
+                {(currentUser?.role === 'admin' || currentUser?.role === 'super_admin') ? (
+                  <Link
+                    to="/resources"
+                    className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  >
+                    Ir a Insumos (/resources)
+                  </Link>
+                ) : (
+                  <Link
+                    to="/tools"
+                    className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  >
+                    Calculadoras de Dosis (/tools)
+                  </Link>
+                )}
                 <Link
                   to="/tasks"
                   className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"

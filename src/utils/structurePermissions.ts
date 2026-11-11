@@ -241,7 +241,12 @@ export function canAccessRoute(user: User | null, routePath: string): boolean {
   if (cleanPath.startsWith('/settings')) {
     return user.role === 'super_admin';
   }
-  if (cleanPath.startsWith('/users') || cleanPath.startsWith('/events')) {
+  if (
+    cleanPath.startsWith('/users') ||
+    cleanPath.startsWith('/events') ||
+    cleanPath.startsWith('/resources') ||
+    cleanPath.startsWith('/integrity')
+  ) {
     return isCentralAdminOrSupervisor(user);
   }
   if (cleanPath.startsWith('/finances') || cleanPath.startsWith('/clients')) {

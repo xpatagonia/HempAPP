@@ -3983,12 +3983,14 @@ export default function TrialManager() {
                                       2. Vincular Insumo Recepcionado de Proveedor Homologado ({prescribedProductsByCategory.length} en {quickAgroCategory})
                                     </span>
                                   </span>
-                                  <Link
-                                    to="/resources"
-                                    className="text-[9px] font-mono font-bold text-teal-700 dark:text-teal-300 hover:underline"
-                                  >
-                                    + Registrar Nuevo Recurso en Inventario BD →
-                                  </Link>
+                                  {(currentUser?.role === 'admin' || currentUser?.role === 'super_admin') && (
+                                    <Link
+                                      to="/resources"
+                                      className="text-[9px] font-mono font-bold text-teal-700 dark:text-teal-300 hover:underline"
+                                    >
+                                      + Registrar Nuevo Recurso en Inventario BD →
+                                    </Link>
+                                  )}
                                 </div>
                                 <div className="flex flex-wrap gap-1.5">
                                   {prescribedProductsByCategory.map(res => {
@@ -4045,12 +4047,14 @@ export default function TrialManager() {
                                     <label className="text-[9px] font-black uppercase text-slate-400 block">
                                       Producto Comercial Homologado en Inventario BD * ({prescribedProductsByCategory.length} disponibles)
                                     </label>
-                                    <Link
-                                      to="/resources"
-                                      className="text-[9px] font-mono font-bold text-teal-600 dark:text-teal-400 hover:underline"
-                                    >
-                                      + Alta en Insumos e Inventario →
-                                    </Link>
+                                    {(currentUser?.role === 'admin' || currentUser?.role === 'super_admin') && (
+                                      <Link
+                                        to="/resources"
+                                        className="text-[9px] font-mono font-bold text-teal-600 dark:text-teal-400 hover:underline"
+                                      >
+                                        + Alta en Insumos e Inventario →
+                                      </Link>
+                                    )}
                                   </div>
                                   <select
                                     value={

@@ -17,8 +17,10 @@ export default function IntegrityCheck() {
         plots, seedBatches, seedMovements, locations, trialRecords, projects,
         varieties, suppliers, clients, usersList, hydricRecords, tasks, logs, storagePoints,
         updateSeedBatch, updatePlot, deleteHydricRecord, deleteTrialRecord,
-        isRefreshing, refreshData 
+        isRefreshing, refreshData, currentUser, impersonatingAdmin
     } = useAppContext();
+
+    const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
 
     const [isFixing, setIsFixing] = useState(false);
     const [isFixingPrecision, setIsFixingPrecision] = useState(false);
@@ -431,6 +433,22 @@ export default function IntegrityCheck() {
         a.click();
         document.body.removeChild(a);
     };
+
+    if (!isAdmin && !impersonatingAdmin) {
+        return (
+            <div className="max-w-xl mx-auto my-16 p-8 rounded-3xl bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/50 text-center space-y-4 shadow-lg">
+                <div className="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto">
+                    <ShieldAlert size={24} />
+                </div>
+                <h2 className="text-lg font-black uppercase text-slate-900 dark:text-white">
+                    Módulo Exclusivo de Administración Central
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                    La consola de <strong>Integridad & Licencias</strong> es de acceso exclusivo para Administradores y Super Administradores de la Cooperativa.
+                </p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500 pb-20">

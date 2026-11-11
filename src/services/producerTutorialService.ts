@@ -87,9 +87,16 @@ export const PRODUCER_VS_ADMIN_MATRIX: ProducerVsAdminRow[] = [
   {
     moduleName: 'Insumos, Inventario y Dosificación',
     route: '/resources',
-    producerCapability: 'Da de alta el stock de su galpón vinculando Proveedor, Ficha Técnica SENASA y rangos de dosificación por ha.',
-    adminCapability: 'Homologa proveedores globales, audita el catálogo de insumos de toda la red y controla costos por unidad.',
-    regulatoryRule: 'Ningún insumo puede aplicarse en una Orden de Labor si no fue previamente dado de alta en este inventario.'
+    producerCapability: 'Acceso restringido al Administrador Central. El productor selecciona los insumos homologados directamente en sus Órdenes de Labor (/tasks) y usa la Calculadora de Dosis (/tools).',
+    adminCapability: 'Exclusivo Administradores: homologa proveedores globales, da de alta el catálogo de insumos SENASA, controla stock y costos por unidad.',
+    regulatoryRule: 'Ningún usuario no-administrador puede acceder a /resources; solo la Administración Central gestiona el alta e inventario maestro.'
+  },
+  {
+    moduleName: 'Integridad & Licencias',
+    route: '/integrity',
+    producerCapability: 'Oculto y restringido para el productor y demás roles operativos.',
+    adminCapability: 'Exclusivo Administradores y Super Admin: auditoría de integridad de base de datos, licencias regulatorias INASE/SENASA y diagnósticos.',
+    regulatoryRule: 'Acceso blindado exclusivamente para Administradores Centrales (admin / super_admin).'
   },
   {
     moduleName: 'Parcelas de Cultivo',

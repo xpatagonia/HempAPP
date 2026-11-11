@@ -4417,12 +4417,14 @@ export default function PlotDetails() {
                     <label className={labelClass}>
                       Producto Comercial Prescripto en Inventario BD * ({prescribedPlotResources.length} disponibles)
                     </label>
-                    <Link
-                      to="/resources"
-                      className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
-                    >
-                      + Alta en Insumos e Inventario →
-                    </Link>
+                    {(currentUser?.role === 'admin' || currentUser?.role === 'super_admin') && (
+                      <Link
+                        to="/resources"
+                        className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                      >
+                        + Alta en Insumos e Inventario →
+                      </Link>
+                    )}
                   </div>
                   <select
                     required
