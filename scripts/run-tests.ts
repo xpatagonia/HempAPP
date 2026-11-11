@@ -1563,7 +1563,8 @@ test("13.7 Auditoría Integral de App Android & Windows (Iconografía Oficial He
     assert.equal(manifest.short_name, 'HempC', 'short_name del manifest debe ser HempC');
     assert.ok(manifest.name.includes('HempC'), 'name del manifest debe incluir HempC');
     assert.equal(manifest.theme_color, '#DDDB00', 'theme_color oficial debe ser #DDDB00');
-    assert.ok(Array.isArray(manifest.icons) && manifest.icons.length >= 6, 'manifest.json debe declarar íconos any, maskable e ico');
+    assert.ok(Array.isArray(manifest.icons) && manifest.icons.length === 5, 'manifest.json debe declarar exclusivamente los 5 íconos PNG oficiales (any + maskable) para Android WebAPK y Windows');
+    assert.ok(manifest.icons.every((ic: any) => ic.type === 'image/png'), 'Todos los íconos de manifest.json deben ser PNG puros para garantizar renderizado del sello HempC en Android');
 
     const swRaw = fs.readFileSync(path.join(publicDir, 'sw.js'), 'utf8');
     assert.ok(swRaw.includes("addEventListener('fetch'"), 'sw.js debe incluir manejador fetch para instalabilidad PWA en Android/Windows');
