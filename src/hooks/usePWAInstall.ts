@@ -5,8 +5,19 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 }
 
+declare global {
+  interface Window {
+    __hempcDeferredPrompt?: BeforeInstallPromptEvent | null;
+  }
+}
+
 export function usePWAInstall() {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(() => {
+    if (typeof window !== 'undefined' && window.__hempcDeferredPrompt) {
+      return window.__hempcDeferredPrompt;
+    }
+    return null;
+  });
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [isAndroid, setIsAndroid] = useState(false);
@@ -24,6 +35,10 @@ export function usePWAInstall() {
       document.referrer.includes('android-app://');
     setIsInstalled(isStandalone);
 
+    if (window.__hempcDeferredPrompt) {
+      setDeferredPrompt(window.__hempcDeferredPrompt);
+    }
+
     // Detect OS & environment
     const userAgent = window.navigator.userAgent.toLowerCase();
     setIsIOS(/iphone|ipad|ipod/.test(userAgent));
@@ -38,29 +53,44 @@ export function usePWAInstall() {
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
+      const promptEvent = e as BeforeInstallPromptEvent;
+      window.__hempcDeferredPrompt = promptEvent;
+      setDeferredPrompt(promptEvent);
+    };
+
+    const handleCustomPromptReady = () => {
+      if (window.__hempcDeferredPrompt) {
+        setDeferredPrompt(window.__hempcDeferredPrompt);
+      }
     };
 
     const handleAppInstalled = () => {
       setIsInstalled(true);
+      window.__hempcDeferredPrompt = null;
       setDeferredPrompt(null);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('hempc:pwa-prompt-ready', handleCustomPromptReady);
     window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('hempc:pwa-prompt-ready', handleCustomPromptReady);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
 
   const install = async () => {
-    if (!deferredPrompt) return false;
-    await deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
+    const activePrompt = deferredPrompt || (typeof window !== 'undefined' ? window.__hempcDeferredPrompt : null);
+    if (!activePrompt) return false;
+    await activePrompt.prompt();
+    const { outcome } = await activePrompt.userChoice;
     if (outcome === 'accepted') {
       setIsInstalled(true);
+      if (typeof window !== 'undefined') {
+        window.__hempcDeferredPrompt = null;
+      }
       setDeferredPrompt(null);
       return true;
     }
@@ -68,23 +98,34 @@ export function usePWAInstall() {
   };
 
   /**
-   * Generates and downloads a standalone Windows Desktop App Launcher (.bat)
-   * that opens HempC Nucleus in native-like Edge/Chrome --app window mode
-   * (without browser tabs or address bar).
+   * Generates and downloads a standalone Windows Desktop App Installer & Launcher (.bat)
+   * that automatically downloads the official high-DPI HempC brand icon (hempc-icon.ico),
+   * creates a native Windows Desktop & Start Menu Shortcut ("HempC Nucleus.lnk") with the
+   * official HempC icon, and launches HempC Nucleus in native Edge/Chrome --app window mode.
    */
   const downloadWindowsLauncher = () => {
     const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://hempc.com.ar';
     const batContent = [
       '@echo off',
-      'title HempC Nucleus - Estacion de Escritorio Windows',
+      'title HempC Nucleus - Instalador y Lanzador Oficial Windows',
       'color 0A',
       'echo ==========================================================',
       'echo   HEMPC NUCLEUS - RED COOPERATIVA DE CANAMO INDUSTRIAL',
-      'echo   Iniciando Aplicacion de Escritorio para Windows...',
+      'echo   Configurando Icono Oficial HempC en Escritorio Windows...',
       'echo ==========================================================',
       'set "APP_URL=' + appUrl + '"',
+      'set "ICON_URL=' + appUrl + '/hempc-icon.ico?v=7.46.0"',
+      'set "APP_DIR=%LOCALAPPDATA%\\HempC_Nucleus"',
+      'set "ICON_PATH=%APP_DIR%\\hempc-icon.ico"',
+      'if not exist "%APP_DIR%" mkdir "%APP_DIR%"',
       '',
-      'REM Intentar abrir en modo App Nativa con Microsoft Edge (preinstalado en Windows 10/11)',
+      'REM Descargar icono oficial multi-resolucion HempC (.ico)',
+      'powershell -NoProfile -ExecutionPolicy Bypass -Command "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri \'%ICON_URL%\' -OutFile \'%ICON_PATH%\' -UseBasicParsing -TimeoutSec 10 } catch {}"',
+      '',
+      'REM Crear Acceso Directo Nativo en Escritorio y Menu Inicio con el Icono Oficial HempC',
+      'powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $ws = New-Object -ComObject WScript.Shell; $desk = [Environment]::GetFolderPath(\'Desktop\'); $sm = [Environment]::GetFolderPath(\'Programs\'); $edge = \'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe\'; if (-not (Test-Path $edge)) { $edge = \'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe\' }; foreach ($dir in @($desk, $sm)) { $lnk = $ws.CreateShortcut((Join-Path $dir \'HempC Nucleus.lnk\')); if (Test-Path $edge) { $lnk.TargetPath = $edge; $lnk.Arguments = \'--app=\' + \'%APP_URL%\' } else { $lnk.TargetPath = \'%APP_URL%\' }; if (Test-Path \'%ICON_PATH%\') { $lnk.IconLocation = \'%ICON_PATH%,0\' }; $lnk.Description = \'HempC Nucleus - Plataforma de Trazabilidad Agro 4.0\'; $lnk.Save() } } catch {}"',
+      '',
+      'REM Abrir en modo App Nativa con Microsoft Edge (preinstalado en Windows 10/11)',
       'start "" msedge --app="%APP_URL%" 2>nul',
       'if %errorlevel% equ 0 exit',
       '',
@@ -110,14 +151,14 @@ export function usePWAInstall() {
 
   /**
    * Generates and downloads a standard Windows Internet Shortcut (.url)
-   * that can be placed directly on the Windows Desktop.
+   * configured with the official HempC multi-size .ico file.
    */
   const downloadWindowsShortcut = () => {
     const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://hempc.com.ar';
     const urlContent = [
       '[InternetShortcut]',
       `URL=${appUrl}`,
-      `IconFile=${appUrl}/favicon.ico`,
+      `IconFile=${appUrl}/hempc-icon.ico`,
       'IconIndex=0',
       'HotKey=0',
       'IDList=',
@@ -146,4 +187,5 @@ export function usePWAInstall() {
     downloadWindowsShortcut,
   };
 }
+
 

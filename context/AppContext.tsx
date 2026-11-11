@@ -571,11 +571,17 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     });
 
     const [theme, setTheme] = useState<'light'|'dark'>('light');
-    const [appName, setAppName] = useState(localStorage.getItem('ht_app_name') || 'HempC');
+    const [appName, setAppName] = useState(() => {
+        const storedName = localStorage.getItem('ht_app_name');
+        if (!storedName || storedName.trim().toUpperCase() === 'RED') {
+            return 'HempC';
+        }
+        return storedName;
+    });
     const [appLogo, setAppLogo] = useState(() => {
         const stored = localStorage.getItem('ht_app_logo');
-        if (!stored || stored.includes('AAAEuUAAAEt')) {
-            return '/hempc-logo-cropped.png?v=7.18.2';
+        if (!stored || stored.includes('AAAEuUAAAEt') || stored.includes('iVBORw0KGgoAAAANSUhEUgAAAeUAAAEt')) {
+            return '/hempc-logo-cropped.png?v=7.46.0';
         }
         return stored;
     });
@@ -2073,13 +2079,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                         const { data } = await supabase.from('platform_settings').select('*').maybeSingle();
                         if (data) {
                             if (data.app_name) {
-                                setAppName(data.app_name);
-                                localStorage.setItem('ht_app_name', data.app_name);
+                                const resolvedName = String(data.app_name).trim().toUpperCase() === 'RED' ? 'HempC' : data.app_name;
+                                setAppName(resolvedName);
+                                localStorage.setItem('ht_app_name', resolvedName);
                             }
                             if (data.app_logo) {
-                                const resolvedLogo = String(data.app_logo).includes('AAAEuUAAAEt')
-                                    ? '/hempc-logo-cropped.png?v=7.18.2'
-                                    : data.app_logo;
+                                const rawLogo = String(data.app_logo);
+                                const resolvedLogo =
+                                    rawLogo.includes('AAAEuUAAAEt') || rawLogo.includes('iVBORw0KGgoAAAANSUhEUgAAAeUAAAEt')
+                                        ? '/hempc-logo-cropped.png?v=7.46.0'
+                                        : data.app_logo;
                                 setAppLogo(resolvedLogo);
                                 localStorage.setItem('ht_app_logo', resolvedLogo);
                             }

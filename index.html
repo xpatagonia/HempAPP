@@ -3,35 +3,43 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HempC | NUCLEUS V7.35.0-STABLE</title>
+    <title>HempC | NUCLEUS V7.46.0-STABLE</title>
     <meta name="description" content="NUCLEUS — Plataforma Inteligente de trazabilidad y gestión agro industrial. Red Cooperativa de Agricultores de Cáñamo Industrial Argentina." />
-    <meta property="og:title" content="HempC | NUCLEUS V7.35.0-STABLE" />
+    <meta property="og:title" content="HempC | NUCLEUS V7.46.0-STABLE" />
     <meta property="og:description" content="NUCLEUS — Plataforma Inteligente de trazabilidad y gestión agro industrial. Red Cooperativa de Agricultores de Cáñamo Industrial Argentina." />
 
     <!-- PWA & Mobile Web App Manifest (Android, Windows & iOS) -->
-    <link rel="manifest" href="/manifest.json?v=7.21.0" />
-    <link rel="shortcut icon" href="/favicon.ico?v=7.21.0" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=7.21.0" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png?v=7.21.0" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg?v=7.21.0" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=7.21.0" />
+    <link rel="manifest" href="/manifest.json?v=7.46.0" />
+    <link rel="shortcut icon" href="/favicon.ico?v=7.46.0" />
+    <link rel="icon" type="image/x-icon" href="/hempc-icon.ico?v=7.46.0" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=7.46.0" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/pwa-192x192.png?v=7.46.0" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/pwa-512x512.png?v=7.46.0" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg?v=7.46.0" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=7.46.0" />
     <meta name="theme-color" content="#DDDB00" />
     <meta name="msapplication-TileColor" content="#DDDB00" />
-    <meta name="msapplication-TileImage" content="/pwa-192x192.png?v=7.21.0" />
+    <meta name="msapplication-TileImage" content="/pwa-192x192.png?v=7.46.0" />
     <meta name="application-name" content="HempC" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="HempC" />
 
-    <!-- Cache Control V7.21.0-STABLE -->
+    <!-- Cache Control V7.46.0-STABLE -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
 
-    <!-- HashRouter SPA Route Recovery -->
+    <!-- HashRouter SPA Route Recovery & Early PWA Install Event Capture -->
     <script>
       (function() {
+        window.__hempcDeferredPrompt = null;
+        window.addEventListener('beforeinstallprompt', function(e) {
+          e.preventDefault();
+          window.__hempcDeferredPrompt = e;
+          window.dispatchEvent(new CustomEvent('hempc:pwa-prompt-ready'));
+        });
         var p = window.location.pathname;
         if (p && p !== '/' && p !== '/index.html' && !window.location.hash) {
           window.location.replace('/#' + p + window.location.search);
@@ -73,15 +81,18 @@
   </head>
   <body class="bg-slate-50 dark:bg-black text-slate-900 dark:text-white transition-colors duration-300">
     <div id="root">
-      <!-- Pantalla de carga BRANDED -->
+      <!-- Pantalla de carga BRANDED con Ícono Oficial HempC -->
       <div style="display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; background: #0f172a; color: #10b981;">
-        <div style="margin-bottom: 20px; font-weight: 900; font-size: 38px; font-family: 'Inter', sans-serif; letter-spacing: -1.5px; text-transform: uppercase; border-left: 6px solid #10b981; padding-left: 18px; color: #ffffff;">
-          HempC <span style="color: #10b981;">Nucleus</span>
+        <div style="background: #DDDB00; padding: 16px 26px; border-radius: 22px; margin-bottom: 18px; box-shadow: 0 20px 40px rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center;">
+          <img src="/hempc-logo-cropped.png?v=7.46.0" alt="HempC" style="height: 52px; width: auto; display: block;" />
         </div>
-        <p style="font-family: monospace; opacity: 0.7; font-weight: bold; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #94a3b8;">
-          Cargando entorno Agro 4.0 & Supabase...
+        <div style="margin-bottom: 8px; font-weight: 900; font-size: 20px; font-family: 'Inter', sans-serif; letter-spacing: 2px; text-transform: uppercase; color: #ffffff;">
+          NUCLEUS <span style="color: #10b981;">AGRO 4.0</span>
+        </div>
+        <p style="font-family: monospace; opacity: 0.75; font-weight: bold; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #94a3b8;">
+          Cargando entorno cooperativo HempC & Supabase...
         </p>
-        <div style="margin-top: 30px; width: 36px; height: 36px; border: 3px solid rgba(16, 185, 129, 0.2); border-top-color: #10b981; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+        <div style="margin-top: 24px; width: 34px; height: 34px; border: 3px solid rgba(221, 219, 0, 0.25); border-top-color: #DDDB00; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
       </div>
     </div>
     <script type="module" src="/index.tsx"></script>

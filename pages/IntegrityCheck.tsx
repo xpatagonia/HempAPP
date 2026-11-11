@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { convertSeedMassToKg, formatBatchMassKg } from '../src/utils/seedTraceability';
+import { partitionUsersByScope } from '../src/services/eventsManagementService';
 
 export default function IntegrityCheck() {
     const { 
@@ -231,13 +232,16 @@ export default function IntegrityCheck() {
             }
         });
 
-        // 5c. CHEQUEO DE PADRÓN DE USUARIOS COTEJADOS EN CAMPAÑA
-        (usersList || []).forEach(u => {
+        // 5c. CHEQUEO DE PADRÓN DE USUARIOS COTEJADOS EN CAMPAÑA (Excluye visitantes de eventos y postulantes pendientes)
+        const activeSystemUsers = partitionUsersByScope(usersList || []).systemUsers.filter(
+            u => u.accountStatus !== 'pending_approval'
+        );
+        activeSystemUsers.forEach(u => {
             const isCentral = u.role === 'super_admin' || u.role === 'admin';
             const hasClient = Boolean(u.clientId && clients.some(c => c.id === u.clientId));
             const hasSupplier = Boolean(u.supplierId && suppliers.some(s => s.id === u.supplierId));
             if (!isCentral && !hasClient && !hasSupplier) {
-                issues.push({ id: `u-unlinked-${u.id}`, level: 'warning', cat: 'Usuarios', item: u.name, msg: 'Usuario sin vinculación a Socio de la Red ni Proveedor Obtentor homologado', link: '/admin' });
+                issues.push({ id: `u-unlinked-${u.id}`, level: 'warning', cat: 'Usuarios', item: u.name, msg: 'Usuario sin vinculación a Socio de la Red ni Proveedor Obtentor homologado', link: '/users' });
             }
         });
 

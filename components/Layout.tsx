@@ -285,7 +285,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
               }`}
             >
               <img
-                src={appLogo || '/hempc-logo-cropped.png?v=7.18.2'}
+                src={appLogo || '/hempc-logo-cropped.png?v=7.46.0'}
                 alt="HempC"
                 className="w-full h-full object-contain"
               />
@@ -297,7 +297,7 @@ export default function Layout({ children }: { children?: React.ReactNode }) {
                 </span>
                 <span className="text-[9px] font-mono font-bold text-emerald-950/80 uppercase tracking-wider block mt-0.5 truncate">
                   {/* @ts-ignore */}
-                  {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.35.0-STABLE'}
+                  {typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'V7.46.0-STABLE'}
                 </span>
               </div>
             )}

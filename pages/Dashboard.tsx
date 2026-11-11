@@ -942,14 +942,16 @@ export default function Dashboard() {
             <SlidersHorizontal size={11} /> Vista:
           </span>
           {([
-            { id: 'overview', label: 'Resumen Ejecutivo (Operativo)', icon: null, activeCls: 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' },
-            { id: 'water', label: `Huella Hídrica & Lluvias (${globalWaterSummary.totalRainEvents})`, icon: CloudRain, activeCls: 'bg-sky-600 text-white' },
-            { id: 'satellite', label: `Satelital NDVI (${criticalAlerts.length})`, icon: Satellite, activeCls: 'bg-emerald-600 text-white' },
-            { id: 'senasa', label: 'SENASA & Fitosanitario', icon: ShieldCheck, activeCls: 'bg-purple-600 text-white' },
-            { id: 'yield', label: 'Rendimiento & Cosecha', icon: BarChart3, activeCls: 'bg-indigo-600 text-white' },
-            { id: 'finances', label: 'Costos & ROI', icon: DollarSign, activeCls: 'bg-emerald-700 text-white' },
-            { id: 'licenses', label: 'Licencias & Integridad', icon: Award, activeCls: 'bg-amber-600 text-white' }
-          ] as const).map(tab => {
+            { id: 'overview' as const, label: 'Resumen Ejecutivo (Operativo)', icon: null, activeCls: 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' },
+            { id: 'water' as const, label: `Huella Hídrica & Lluvias (${globalWaterSummary.totalRainEvents})`, icon: CloudRain, activeCls: 'bg-sky-600 text-white' },
+            { id: 'satellite' as const, label: `Satelital NDVI (${criticalAlerts.length})`, icon: Satellite, activeCls: 'bg-emerald-600 text-white' },
+            { id: 'senasa' as const, label: 'SENASA & Fitosanitario', icon: ShieldCheck, activeCls: 'bg-purple-600 text-white' },
+            { id: 'yield' as const, label: 'Rendimiento & Cosecha', icon: BarChart3, activeCls: 'bg-indigo-600 text-white' },
+            { id: 'finances' as const, label: 'Costos & ROI', icon: DollarSign, activeCls: 'bg-emerald-700 text-white' },
+            ...(currentUser?.role === 'admin' || currentUser?.role === 'super_admin'
+              ? [{ id: 'licenses' as const, label: 'Licencias & Integridad', icon: Award, activeCls: 'bg-amber-600 text-white' }]
+              : [])
+          ]).map(tab => {
             const Icon = tab.icon;
             const isActive = activeSection === tab.id;
             return (
@@ -2374,8 +2376,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* PESTAÑA: LICENCIAS & INTEGRIDAD */}
-      {activeSection === 'licenses' && (
+      {/* PESTAÑA: LICENCIAS & INTEGRIDAD (Exclusivo Administradores) */}
+      {(currentUser?.role === 'admin' || currentUser?.role === 'super_admin') && activeSection === 'licenses' && (
         <DashboardLicenseIntegritySummary />
       )}
 

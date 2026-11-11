@@ -271,6 +271,10 @@ export default function DashboardLicenseIntegritySummary() {
     }, 600);
   };
 
+  if (!isAdmin) {
+    return null;
+  }
+
   return (
     <>
       <div className="bg-white dark:bg-slate-900 rounded-2xl md:rounded-3xl p-5 md:p-7 border border-slate-200/90 dark:border-slate-800 shadow-sm relative overflow-hidden transition-all duration-300">

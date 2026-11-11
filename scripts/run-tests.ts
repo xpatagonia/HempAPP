@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { 
     getPlotNDVIAlertStatus, 
     generateDetailedSatellitePasses, 
@@ -7,7 +9,7 @@ import {
     calculateWaterEfficiency,
     calculateCarbonFootprint
 } from '../src/services/agro40Service.js';
-import { DEMO_USERS_LIST, DEMO_SUPPLIERS, DEMO_STORAGE_POINTS, DEMO_PLOTS, DEMO_LOCATIONS, DEMO_CLIENTS, DEMO_VARIETIES, DEMO_SEED_BATCHES, DEMO_PROJECTS, DEMO_TASKS, DEMO_TRIALS, DEMO_AGROCHEMICAL_APPLICATIONS } from '../src/data/initialDemoData.js';
+import { DEMO_USERS_LIST, DEMO_SUPPLIERS, DEMO_STORAGE_POINTS, DEMO_PLOTS, DEMO_LOCATIONS, DEMO_CLIENTS, DEMO_VARIETIES, DEMO_SEED_BATCHES, DEMO_SEED_MOVEMENTS, DEMO_PROJECTS, DEMO_TASKS, DEMO_TRIALS, DEMO_AGROCHEMICAL_APPLICATIONS } from '../src/data/initialDemoData.js';
 import {
     isCentralAdminOrSupervisor,
     isSupplierRestrictedUser,
@@ -1516,6 +1518,111 @@ test("13.6 Auditoría Exhaustiva de los 11 Operadores del Sistema, Solicitudes P
     assert.equal(canAccessRoute(eventVisitor, '/resources'), false);
     assert.equal(canAccessRoute(eventVisitor, '/integrity'), false);
     assert.equal(DEMO_PLOTS.filter(p => canAccessPlot(eventVisitor, p, DEMO_LOCATIONS, DEMO_CLIENTS)).length, 0);
+});
+
+test("13.7 Auditoría Integral de App Android & Windows (Iconografía Oficial HempC + Consistencia Relacional de Datos)", () => {
+    const publicDir = path.resolve(process.cwd(), 'public');
+
+    // 1. Verificar existencia y validez binaria de todos los íconos oficiales HempC (Android WebAPK + Windows ICO + iOS)
+    const requiredPngAssets = [
+        'hempc-logo-cropped.png',
+        'pwa-192x192.png',
+        'pwa-256x256.png',
+        'pwa-512x512.png',
+        'pwa-maskable-192x192.png',
+        'pwa-maskable-512x512.png',
+        'apple-touch-icon.png',
+        'favicon-32x32.png'
+    ];
+    for (const file of requiredPngAssets) {
+        const fullPath = path.join(publicDir, file);
+        assert.ok(fs.existsSync(fullPath), `Debe existir el activo oficial HempC ${file}`);
+        const buf = fs.readFileSync(fullPath);
+        assert.ok(buf.length > 500, `El archivo ${file} no debe estar vacío (${buf.length} bytes)`);
+        // Firma mágica PNG: 89 50 4E 47
+        assert.equal(buf[0], 0x89, `${file} debe tener cabecera PNG válida`);
+        assert.equal(buf[1], 0x50, `${file} debe tener cabecera PNG válida`);
+        assert.equal(buf[2], 0x4E, `${file} debe tener cabecera PNG válida`);
+        assert.equal(buf[3], 0x47, `${file} debe tener cabecera PNG válida`);
+    }
+
+    // 2. Verificar contenedor ICO multi-resolución para Windows 10/11 (16, 32, 48, 64, 128, 256px)
+    for (const icoFile of ['favicon.ico', 'hempc-icon.ico']) {
+        const icoPath = path.join(publicDir, icoFile);
+        assert.ok(fs.existsSync(icoPath), `Debe existir el ícono nativo Windows ${icoFile}`);
+        const icoBuf = fs.readFileSync(icoPath);
+        assert.equal(icoBuf.readUInt16LE(0), 0, `${icoFile} header reserved debe ser 0`);
+        assert.equal(icoBuf.readUInt16LE(2), 1, `${icoFile} type debe ser 1 (ICO)`);
+        const numImages = icoBuf.readUInt16LE(4);
+        assert.equal(numImages, 6, `${icoFile} debe incluir exactamente 6 capas de resolución Windows High-DPI (16..256px)`);
+    }
+
+    // 3. Verificar manifest.json y Service Worker (Android WebAPK + Windows Edge/Chrome)
+    const manifestRaw = fs.readFileSync(path.join(publicDir, 'manifest.json'), 'utf8');
+    const manifest = JSON.parse(manifestRaw);
+    assert.equal(manifest.short_name, 'HempC', 'short_name del manifest debe ser HempC');
+    assert.ok(manifest.name.includes('HempC'), 'name del manifest debe incluir HempC');
+    assert.equal(manifest.theme_color, '#DDDB00', 'theme_color oficial debe ser #DDDB00');
+    assert.ok(Array.isArray(manifest.icons) && manifest.icons.length >= 6, 'manifest.json debe declarar íconos any, maskable e ico');
+
+    const swRaw = fs.readFileSync(path.join(publicDir, 'sw.js'), 'utf8');
+    assert.ok(swRaw.includes("addEventListener('fetch'"), 'sw.js debe incluir manejador fetch para instalabilidad PWA en Android/Windows');
+
+    // 4. Consistencia Relacional de Datos de Campaña (44 parcelas, 4 campos, 4 clientes, 16 lotes, 12 movimientos)
+    const clientIds = new Set(DEMO_CLIENTS.map(c => c.id));
+    const locationIds = new Set(DEMO_LOCATIONS.map(l => l.id));
+    const varietyIds = new Set(DEMO_VARIETIES.map(v => v.id));
+    const batchIds = new Set(DEMO_SEED_BATCHES.map(b => b.id));
+    const storageIds = new Set(DEMO_STORAGE_POINTS.map(s => s.id));
+
+    for (const loc of DEMO_LOCATIONS) {
+        assert.ok(loc.clientId && clientIds.has(loc.clientId), `El campo ${loc.name} debe referenciar un cliente válido`);
+    }
+
+    for (const plot of DEMO_PLOTS) {
+        assert.ok(locationIds.has(plot.locationId), `La parcela ${plot.name} debe pertenecer a un campo válido`);
+        assert.ok(varietyIds.has(plot.varietyId), `La parcela ${plot.name} debe referenciar una genética válida`);
+        if (plot.seedBatchId) {
+            assert.ok(batchIds.has(plot.seedBatchId), `La parcela ${plot.name} debe referenciar un lote de semillas válido`);
+        }
+    }
+
+    // 5. Conciliación Matemática Exacta de Lotes de Semillas y Movimientos Logísticos
+    for (const mov of DEMO_SEED_MOVEMENTS) {
+        assert.ok(batchIds.has(mov.batchId), `El movimiento ${mov.id} debe referenciar un lote válido`);
+        assert.ok(
+            locationIds.has(mov.targetLocationId) || storageIds.has(mov.targetLocationId),
+            `El movimiento ${mov.id} debe referenciar un establecimiento o depósito destino válido`
+        );
+        if (mov.originStorageId) {
+            assert.ok(storageIds.has(mov.originStorageId), `El movimiento ${mov.id} debe referenciar un depósito origen válido`);
+        }
+    }
+
+    // Verificar que los usuarios de eventos o pendientes de aprobación no disparen falsos positivos en auditoría de clientes/proveedores
+    const { systemUsers } = partitionUsersByScope([
+        ...DEMO_USERS_LIST,
+        createPendingPublicRegistration({
+            name: 'Postulante Pendiente',
+            email: 'postulante@test.com',
+            phone: '+5491100000000',
+            dniNumber: '33444555',
+            requestedProfileType: 'productor_agropecuario',
+            organizationName: 'Agro Test',
+            localityOrProvince: 'Chubut',
+            registrationSource: 'self_service_platform'
+        }).user,
+        createEventRegistrationRecord({
+            name: 'Asistente Evento',
+            email: 'asistente@test.com',
+            phone: '+5491122223333',
+            dniNumber: '35666777',
+            localityOrProvince: 'Río Negro',
+            event: DEFAULT_FIELD_EVENTS[0]
+        })
+    ]);
+    const activeSystemUsers = systemUsers.filter(u => u.accountStatus !== 'pending_approval');
+    assert.equal(activeSystemUsers.length, DEMO_USERS_LIST.length, 'Solo los usuarios activos de sistema deben auditarse para vínculos de Clientes/Proveedores');
 });
 
 console.log("\n=================================================");
