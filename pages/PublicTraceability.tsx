@@ -12,6 +12,11 @@ import { AgrochemicalApplication, Plot, Location, Variety, Supplier, SupplierLot
 import { BarcodeSVG } from '../components/BarcodeSVG';
 import { formatPlotSeedLoad, formatBatchMassKg } from '../src/utils/seedTraceability';
 import { resolveSanitizedPlotRoster } from '../src/utils/establishmentRoster';
+import {
+    calculatePlotHarvestDates,
+    resolvePlotHarvestProfile,
+    calculatePlotExpectedVsActualYield
+} from '../src/services/harvestValueChainService';
 import { DEMO_PLOTS as HISTORICAL_PLOTS, DEMO_LOCATIONS as HISTORICAL_LOCATIONS, DEMO_VARIETIES as HISTORICAL_VARIETIES, DEMO_SEED_BATCHES as HISTORICAL_BATCHES } from '../src/data/historicalCampaignSeed';
 import { 
     DEMO_PLOTS as INITIAL_PLOTS, 
@@ -638,6 +643,66 @@ export default function PublicTraceability() {
                         </Link>
                     </div>
                 </div>
+
+                {/* ACTA DE COSECHA, DESTINO PRODUCTIVO HEREDADO Y DOBLE VARIABLE DE FECHA (ARICCAME LEY 27.669) */}
+                {resolvedPlot && (() => {
+                    const harvestDates = calculatePlotHarvestDates(resolvedPlot, resolvedVariety);
+                    const harvestProfile = resolvePlotHarvestProfile(resolvedPlot, resolvedVariety);
+                    const yieldSummary = calculatePlotExpectedVsActualYield(resolvedPlot, resolvedVariety, seedBatches);
+                    return (
+                        <div className="bg-emerald-950/30 border border-emerald-500/30 p-5 md:p-6 rounded-3xl space-y-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-500/20 pb-3">
+                                <div>
+                                    <span className="text-[9px] font-black uppercase text-emerald-400 tracking-widest block">
+                                        Trazabilidad de Cosecha y Cadena de Valor · Exigencia ARICCAME Ley 27.669
+                                    </span>
+                                    <h2 className="text-base md:text-lg font-black uppercase text-white tracking-tight">
+                                        {harvestProfile.harvestTargetLabel} ({harvestProfile.usageCategory})
+                                    </h2>
+                                </div>
+                                <span className="text-[10px] font-mono font-bold text-emerald-300 bg-emerald-950/80 px-3 py-1 rounded-xl border border-emerald-800">
+                                    {yieldSummary.harvestActCode}
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                                <div className="bg-slate-950/90 p-3.5 rounded-2xl border border-slate-800 space-y-1">
+                                    <span className="text-[9px] font-black uppercase text-slate-400 block">1. Fecha Base de Siembra</span>
+                                    <strong className="text-white text-sm font-mono font-black block">{harvestDates.sowingDate}</strong>
+                                    <p className="text-[10px] text-slate-400">
+                                        Superficie: {resolvedPlot.surfaceArea} {resolvedPlot.surfaceUnit || 'ha'} ({harvestProfile.surfaceHa.toFixed(4)} ha)
+                                    </p>
+                                </div>
+
+                                <div className="bg-slate-950/90 p-3.5 rounded-2xl border border-sky-500/20 space-y-1">
+                                    <span className="text-[9px] font-black uppercase text-sky-400 block">2. Variable 1 (Ciclo Genético)</span>
+                                    <strong className="text-sky-300 text-sm font-mono font-black block">{harvestDates.geneticEstimatedHarvestDate}</strong>
+                                    <p className="text-[10px] text-slate-400">
+                                        Siembra + {harvestDates.nominalCycleDays} días ({resolvedVariety?.name || 'Genética'})
+                                    </p>
+                                </div>
+
+                                <div className="bg-slate-950/90 p-3.5 rounded-2xl border border-emerald-500/30 space-y-1">
+                                    <span className="text-[9px] font-black uppercase text-emerald-400 block">3. Variable 2 (Fecha Final Productor)</span>
+                                    <strong className="text-emerald-300 text-sm font-mono font-black block">{harvestDates.producerFinalHarvestDate}</strong>
+                                    <p className="text-[10px] text-emerald-400 font-bold">
+                                        Ciclo real: {harvestDates.actualCycleDays} días ({harvestDates.deltaLabel})
+                                    </p>
+                                </div>
+
+                                <div className="bg-slate-950/90 p-3.5 rounded-2xl border border-amber-500/20 space-y-1">
+                                    <span className="text-[9px] font-black uppercase text-amber-400 block">4. Rinde Estimado vs. Real</span>
+                                    <strong className="text-white text-sm font-mono font-black block">
+                                        {yieldSummary.totalExpectedKg.toFixed(1)} kg ➔ {yieldSummary.totalActualKg.toFixed(1)} kg
+                                    </strong>
+                                    <p className="text-[10px] text-amber-300 font-bold">
+                                        Eficiencia de Cosecha: {yieldSummary.overallEfficiencyPct}%
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
 
                 {/* PERSONAL INTERVINIENTE EN TOMA DE MUESTRAS Y TRAZABILIDAD */}
                 <div className="bg-indigo-950/30 border border-indigo-500/30 p-5 md:p-6 rounded-3xl space-y-4">

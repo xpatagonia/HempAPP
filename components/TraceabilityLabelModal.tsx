@@ -45,6 +45,12 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
   const motherSeedLot = batch.certificationNumber || (batch.batchCode.includes('-REC-') ? batch.batchCode.split('-REC-')[0] : batch.batchCode);
   const officialRotulo = batch.labelSerialNumber || 'INASE-SERIE-2025-A0041928';
 
+  const isHarvestedMaterial = Boolean(batch.materialType && batch.materialType !== 'seed');
+  const originPlot = batch.originPlotId ? plots.find(p => String(p.id) === String(batch.originPlotId)) : undefined;
+  const harvestActNumber = originPlot
+    ? `ACTA-COSECHA-2526-${originPlot.id.replace(/[^A-Z0-9]/gi, '').slice(-6).toUpperCase()}`
+    : `ACTA-COSECHA-2526-${batch.id.replace(/[^A-Z0-9]/gi, '').slice(-6).toUpperCase()}`;
+
   const plotsWithThisBatch = plots.filter(p => p.seedBatchId === batch.id);
   const usedInPlotsKg = plotsWithThisBatch.reduce(
     (acc, p) => acc + convertSeedMassToKg(p.usedSeedValue, p.usedSeedUnit || 'gr'),
@@ -84,10 +90,14 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
             </div>
             <div>
               <span className="text-[10px] font-bold uppercase text-emerald-600 tracking-wider">
-                Emisión de Rótulo & Código QR Activo
+                {isHarvestedMaterial
+                  ? 'Emisión de Etiqueta Oficial de Cosecha · Exigencia ARICCAME Ley 27.669'
+                  : 'Emisión de Rótulo & Código QR Activo'}
               </span>
               <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                Rótulo Oficial de Trazabilidad & Custodia de Lote
+                {isHarvestedMaterial
+                  ? 'Etiqueta / Marbete Oficial de Cosecha & Custodia Primaria'
+                  : 'Rótulo Oficial de Trazabilidad & Custodia de Lote'}
               </h2>
             </div>
           </div>
@@ -110,12 +120,14 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
                 CUIT: 30-71816113-0 · HempC (Unidad de Negocios)
               </p>
               <p className="text-[8px] text-slate-500 uppercase font-bold">
-                Pasaporte Biológico · Fiscalización Oficial INASE / ARICCAME / SENASA
+                {isHarvestedMaterial
+                  ? 'Etiqueta Oficial de Cosecha · Trazabilidad Post-Cosecha ARICCAME Ley 27.669 / SENASA / INASE'
+                  : 'Pasaporte Biológico · Fiscalización Oficial INASE / ARICCAME / SENASA'}
               </p>
             </div>
             <div className="text-right space-y-1">
               <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-slate-900 text-white block">
-                {batch.category ? `Cat: ${batch.category}` : batch.materialType === 'seed' ? 'Semilla Fiscal' : 'Material Obtenido'}
+                {batch.category ? `Cat: ${batch.category}` : batch.materialType === 'seed' ? 'Semilla Fiscal' : 'Cosecha Trazada'}
               </span>
               <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase inline-flex items-center gap-1 ${qConfig.badgeClass}`}>
                 <Award size={10} />
@@ -135,22 +147,24 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
                 RNC INASE: <strong>{variety?.inaseRncNumber || 'INASE-RNC-8492/23'}</strong>
               </span>
               <span className="text-[9px] text-slate-500 block mt-0.5">
-                Proveedor: <strong>{batch.supplierName || 'Ananda Pampa / Hemp-It ADN'}</strong>
+                {isHarvestedMaterial && originPlot
+                  ? <>Parcela Cosechada: <strong>{originPlot.name} ({originPlot.surfaceArea} {originPlot.surfaceUnit || 'ha'})</strong></>
+                  : <>Proveedor: <strong>{batch.supplierName || 'Ananda Pampa / Hemp-It ADN'}</strong></>}
               </span>
             </div>
 
             <div className="p-2.5 bg-emerald-50/80 rounded-xl border-2 border-emerald-500">
               <span className="text-[9px] text-emerald-800 uppercase font-black block">
-                {batch.materialType && batch.materialType !== 'seed' ? 'N° Lote Material / Lote Semilla Origen:' : 'N° de Lote de Semilla:'}
+                {isHarvestedMaterial ? 'Lote de Cosecha / Acta Oficial:' : 'N° de Lote de Semilla:'}
               </span>
               <strong className="text-base font-black uppercase text-slate-950 block leading-tight">
-                {motherSeedLot}
+                {isHarvestedMaterial ? batch.batchCode : motherSeedLot}
               </strong>
               <span className="text-[9.5px] text-slate-700 font-bold block mt-0.5 break-all">
-                Cód. Trazabilidad: {batch.batchCode}
+                {isHarvestedMaterial ? `Acta Cosecha: ${harvestActNumber}` : `Cód. Trazabilidad: ${batch.batchCode}`}
               </span>
               <span className="text-[9.5px] text-emerald-800 font-black block mt-0.5">
-                Rótulo Oficial INASE: {officialRotulo}
+                Rótulo Oficial: {officialRotulo}
               </span>
               {batch.sampleCode && (
                 <span className="text-[9px] text-indigo-700 font-bold block mt-0.5">
@@ -164,44 +178,75 @@ export const TraceabilityLabelModal: React.FC<TraceabilityLabelModalProps> = ({
           <div className="bg-slate-900 text-white p-2.5 rounded-xl text-[9.5px] space-y-1">
             <div className="flex items-center justify-between border-b border-slate-700 pb-1">
               <span className="font-black uppercase text-emerald-400 tracking-wider">
-                Trazabilidad del Lote de Semilla (Cadena de Custodia QR)
+                {isHarvestedMaterial
+                  ? 'Trazabilidad de Cosecha (Parcela ➔ Doble Fecha ➔ Custodia ARICCAME)'
+                  : 'Trazabilidad del Lote de Semilla (Cadena de Custodia QR)'}
               </span>
               <span className="text-[8.5px] text-slate-300 font-bold">
-                Ingreso: {batch.purchaseDate || '2025-10-15'}
+                {isHarvestedMaterial ? `Fecha Final Cosecha: ${batch.harvestDate || batch.purchaseDate}` : `Ingreso: ${batch.purchaseDate || '2025-10-15'}`}
               </span>
             </div>
-            <div className="grid grid-cols-3 gap-2 pt-0.5">
-              <div>
-                <span className="text-[8px] text-slate-400 uppercase block">1. Lote Madre / Cert.</span>
-                <strong className="text-emerald-300 block truncate">{motherSeedLot}</strong>
+            {isHarvestedMaterial ? (
+              <div className="grid grid-cols-3 gap-2 pt-0.5">
+                <div>
+                  <span className="text-[8px] text-slate-400 uppercase block">1. Var 1 (Ciclo Genético)</span>
+                  <strong className="text-sky-300 block truncate">
+                    {originPlot?.geneticEstimatedHarvestDate || originPlot?.sowingDate || 'Ciclo Nominal'}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-[8px] text-slate-400 uppercase block">2. Var 2 (Fecha Productor)</span>
+                  <strong className="text-emerald-300 block truncate">
+                    {batch.harvestDate || originPlot?.producerFinalHarvestDate || batch.purchaseDate}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-[8px] text-slate-400 uppercase block">3. Almacén Custodia</span>
+                  <strong className="text-amber-300 block truncate">{storagePoint?.name || 'Depósito de Campo'}</strong>
+                </div>
               </div>
-              <div>
-                <span className="text-[8px] text-slate-400 uppercase block">2. Rótulo / Precinto</span>
-                <strong className="text-sky-300 block truncate">{officialRotulo}</strong>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 pt-0.5">
+                <div>
+                  <span className="text-[8px] text-slate-400 uppercase block">1. Lote Madre / Cert.</span>
+                  <strong className="text-emerald-300 block truncate">{motherSeedLot}</strong>
+                </div>
+                <div>
+                  <span className="text-[8px] text-slate-400 uppercase block">2. Rótulo / Precinto</span>
+                  <strong className="text-sky-300 block truncate">{officialRotulo}</strong>
+                </div>
+                <div>
+                  <span className="text-[8px] text-slate-400 uppercase block">3. Nodo / Almacén</span>
+                  <strong className="text-amber-300 block truncate">{storagePoint?.name || 'Bóveda Central'}</strong>
+                </div>
               </div>
-              <div>
-                <span className="text-[8px] text-slate-400 uppercase block">3. Nodo / Almacén</span>
-                <strong className="text-amber-300 block truncate">{storagePoint?.name || 'Bóveda Central'}</strong>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* BALANCE FÍSICO AUDITADO EN T / KILOS / GRAMOS */}
           <div className="grid grid-cols-3 gap-2 bg-emerald-50/60 p-2.5 rounded-xl border border-emerald-200 text-center text-[10px]">
             <div className="bg-white p-1.5 rounded-lg border border-emerald-100">
-              <span className="text-[8px] text-slate-400 uppercase block font-bold">Masa Inicial Lote</span>
+              <span className="text-[8px] text-slate-400 uppercase block font-bold">
+                {isHarvestedMaterial ? 'Masa Cosechada Lote' : 'Masa Inicial Lote'}
+              </span>
               <strong className="text-slate-900 font-black block">{initialMass.kgStr}</strong>
               <span className="text-[8px] text-slate-500 block">{initialMass.grStr} · {initialMass.tnStr}</span>
             </div>
             <div className="bg-white p-1.5 rounded-lg border border-indigo-100">
               <span className="text-[8px] text-indigo-700 uppercase block font-bold">
-                Carga Siembra ({plotsWithThisBatch.length} Parc.)
+                {isHarvestedMaterial ? 'Parcela / Superficie' : `Carga Siembra (${plotsWithThisBatch.length} Parc.)`}
               </span>
-              <strong className="text-indigo-900 font-black block">{usedMass.kgStr}</strong>
-              <span className="text-[8px] text-indigo-600 font-bold block">{usedMass.grStr} · {usedMass.tnStr}</span>
+              <strong className="text-indigo-900 font-black block">
+                {isHarvestedMaterial && originPlot
+                  ? `${originPlot.surfaceArea} ${originPlot.surfaceUnit || 'ha'}`
+                  : usedMass.kgStr}
+              </strong>
+              <span className="text-[8px] text-indigo-600 font-bold block">
+                {isHarvestedMaterial ? (originPlot?.name || 'Parcela Trazada') : `${usedMass.grStr} · ${usedMass.tnStr}`}
+              </span>
             </div>
             <div className="bg-white p-1.5 rounded-lg border border-emerald-300">
-              <span className="text-[8px] text-emerald-800 uppercase block font-black">Stock Remanente Neto</span>
+              <span className="text-[8px] text-emerald-800 uppercase block font-black">Stock Custodia Activo</span>
               <strong className="text-emerald-800 font-black block">{remainingMass.kgStr}</strong>
               <span className="text-[8px] text-emerald-700 font-bold block">{remainingMass.grStr} · {remainingMass.tnStr}</span>
             </div>

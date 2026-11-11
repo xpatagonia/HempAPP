@@ -29,7 +29,9 @@ import {
     canUserEditPlotHarvestVariable,
     packPlotHarvestMetaIntoObservations,
     unpackPlotHarvestMetaFromObservations,
-    buildHarvestedOutputBatch
+    buildHarvestedOutputBatch,
+    resolvePlotHarvestProfile,
+    calculatePlotExpectedVsActualYield
 } from '../src/services/harvestValueChainService.js';
 import {
     sanitizePlotInputText,
@@ -1723,6 +1725,50 @@ test("13.8 Modelo de Doble Variable de Fecha de Cosecha, Separación de Semillas
     assert.equal(harvestedBatch.harvestDate, '2026-04-05', "El lote cosechado hereda la Fecha Final del Productor (Variable 2)");
     assert.equal(harvestedBatch.initialQuantity, 1420.5);
     assert.equal(harvestedBatch.storagePointId, targetStorage.id);
+});
+
+test("13.9 Eliminación de Redundancia en Semillas INASE y Ficha Paso a Paso del Productor (Herencia de Destino, Rindes Estimados vs Reales, Acta y Etiquetas ARICCAME)", () => {
+    // 1. Verificar que Semillas & Logística INASE (/seed-batches) filtra exclusivamente Semilla Fiscalizada ('seed')
+    const seedBatchesSource = fs.readFileSync(path.resolve(process.cwd(), 'pages/SeedBatches.tsx'), 'utf8');
+    assert.ok(
+        seedBatchesSource.includes("(b.materialType || 'seed') !== 'seed'"),
+        "SeedBatches.tsx debe filtrar estrictamente para mostrar solo Semilla Fiscalizada de Siembra ('seed')"
+    );
+
+    // 2. Verificar Herencia Agronómica de Destino Productivo por Parcela (Grano, Fibra, Flores/Biomasa, Doble Propósito)
+    const samplePlot = DEMO_PLOTS[0];
+    const grainVariety = { ...DEMO_VARIETIES[0], usage: 'Grano' as const, expectedYieldKgHa: 1400 };
+    const fiberVariety = { ...DEMO_VARIETIES[0], usage: 'Fibra' as const, expectedYieldKgHa: 6500 };
+    const medicinalVariety = { ...DEMO_VARIETIES[0], usage: 'Medicinal' as const, expectedYieldKgHa: 1600 };
+    const dualVariety = { ...DEMO_VARIETIES[0], usage: 'Doble Propósito' as const, expectedYieldKgHa: 5000 };
+
+    const grainProfile = resolvePlotHarvestProfile({ ...samplePlot, surfaceArea: 2, surfaceUnit: 'ha' }, grainVariety);
+    assert.equal(grainProfile.primaryMaterialType, 'harvested_grain');
+    assert.equal(grainProfile.surfaceHa, 2);
+
+    const fiberProfile = resolvePlotHarvestProfile({ ...samplePlot, surfaceArea: 5000, surfaceUnit: 'm2' }, fiberVariety);
+    assert.equal(fiberProfile.primaryMaterialType, 'fiber_bales');
+    assert.equal(fiberProfile.surfaceHa, 0.5);
+    assert.ok(fiberProfile.allowedMaterialTypes.includes('hurds'), "El cultivo de Fibra habilita Fardos de Fibra y Cañamiza");
+
+    const medicinalProfile = resolvePlotHarvestProfile({ ...samplePlot, surfaceArea: 1, surfaceUnit: 'ha' }, medicinalVariety);
+    assert.equal(medicinalProfile.primaryMaterialType, 'biomass_cbg');
+
+    const dualProfile = resolvePlotHarvestProfile({ ...samplePlot, surfaceArea: 1, surfaceUnit: 'ha' }, dualVariety);
+    assert.ok(dualProfile.allowedMaterialTypes.includes('harvested_grain'));
+    assert.ok(dualProfile.allowedMaterialTypes.includes('fiber_bales'));
+
+    // 3. Verificar Cálculo de Rinde Estimado vs. Rinde Real Obtenido y Código de Acta de Cosecha + GS1 ARICCAME
+    const yieldSummary = calculatePlotExpectedVsActualYield(
+        { ...samplePlot, surfaceArea: 2, surfaceUnit: 'ha', actualHarvestYieldKg: 2520, closureActCode: undefined, closureBarcode: undefined },
+        grainVariety,
+        DEMO_SEED_BATCHES
+    );
+    assert.equal(yieldSummary.totalExpectedKg, 2800, "2 ha x 1400 kg/ha = 2800 kg esperados");
+    assert.equal(yieldSummary.totalActualKg, 2520, "2520 kg reales declarados");
+    assert.equal(yieldSummary.overallEfficiencyPct, 90, "2520 / 2800 = 90% de eficiencia de cosecha");
+    assert.ok(yieldSummary.harvestActCode.startsWith('ACTA-COSECHA-'), "Debe emitir código de Acta Oficial de Cosecha");
+    assert.ok(yieldSummary.barcodeGs1.startsWith('779839'), "Debe emitir código de barras GS1 para etiquetas ARICCAME");
 });
 
 console.log("\n=================================================");

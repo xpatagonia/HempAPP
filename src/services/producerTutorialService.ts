@@ -395,34 +395,34 @@ export function evaluateProducerSteps(params: {
       id: 'step-06-phytosanitary-harvest',
       number: '06',
       shortTitle: 'SENASA y Cosecha',
-      title: '06. Cuaderno Fitosanitario SENASA, Pasaporte QR y Cierre de Cosecha',
-      subtitle: 'Auditoría legal de tratamientos vinculados a Órdenes de Labor, control de carencia y rinde final de campaña',
+      title: '06. Cuaderno Fitosanitario SENASA, Ficha Guiada de Cosecha y Etiquetado ARICCAME',
+      subtitle: 'Auditoría de carencia SENASA, Ficha Paso a Paso del Productor (Doble Fecha + Rindes), Acta de Cosecha y Etiquetas QR/GS1 ARICCAME',
       primaryRoute: '/phytosanitary',
       primaryCtaLabel: 'Abrir Cuaderno SENASA',
-      secondaryRoute: '/',
-      secondaryCtaLabel: 'Cerrar Ciclo en Control',
+      secondaryRoute: '/harvest',
+      secondaryCtaLabel: 'Abrir Ficha de Cosecha (/harvest)',
       status: step6Status,
       metricsSummary: `${agrochemicalApplications.length} asientos SENASA (${linkedSenasaEntries.length} trazados a labor/insumo)`,
       liveReadinessNote:
         step6Status === 'completed'
-          ? `Trazabilidad SENASA al día: ${linkedSenasaEntries.length} aplicación(es) vinculada(s) a su Orden de Labor e Inventario.`
-          : 'Revisá o certificá tus aplicaciones en /phytosanitary a partir de las Órdenes de Labor de tus lotes.',
+          ? `Trazabilidad SENASA al día: ${linkedSenasaEntries.length} aplicación(es) vinculada(s). Podés avanzar a la Ficha Paso a Paso de Cosecha en /harvest.`
+          : 'Revisá o certificá tus aplicaciones en /phytosanitary y luego completá la Ficha Guiada de Cosecha en /harvest.',
       prerequisiteRule: 'BLOQUEO NORMATIVO: El productor solo puede registrar en el Cuaderno Fitosanitario aplicaciones que provengan de una Orden de Labor de su lote.',
-      producerViewSummary: 'Visualiza el libro SENASA de sus parcelas, certifica la ejecución de sus Órdenes de Labor autorizadas y cierra la cosecha de sus lotes.',
-      adminViewSummary: 'Audita la cadena completa (Proveedor → Insumo → Orden de Labor → Cuaderno SENASA) en todos los establecimientos y exporta reportes regulatorios.',
+      producerViewSummary: 'Visualiza el libro SENASA de sus parcelas, y en Cosecha & Cadena de Valor (/harvest) gestiona su Ficha Guiada de 5 Pasos: Destino Heredado (Grano/Fibra/Flores), Fecha Final de Cosecha (Variable 2), Gráficas de Rinde Estimado vs. Real, Acta Oficial de Cosecha y Etiquetas QR ARICCAME.',
+      adminViewSummary: 'Audita la cadena completa (Proveedor → Semilla INASE → Orden de Labor → Cuaderno SENASA → Acta de Cosecha → DDJJ ARICCAME) en todos los establecimientos.',
       stepByStepChecklist: [
-        'Abrí el "Cuaderno Fitosanitario" (/phytosanitary): verás automáticamente los tratamientos volcados desde tus Órdenes de Labor.',
-        'Si necesitás certificar una orden pendiente desde el Cuaderno, pulsá "Registrar Aplicación", elegí la Orden de Labor Autorizada en el Paso 1 del modal y verificá que el Lote, el Insumo y la Dosis se autocompleten y queden bloqueados.',
-        'Controlá el indicador de "Días de Carencia Pre-Cosecha" antes de programar el corte del lote.',
-        'Al finalizar la campaña, ingresá al Detalle de Parcela (/plots/:id) o al Centro de Control (/) para ejecutar el "Cierre de Ciclo / Cosecha", declarando los kg cosechados y descargando el Rótulo QR Oficial.'
+        'Abrí el "Cuaderno Fitosanitario" (/phytosanitary) y controlá el indicador de "Días de Carencia Pre-Cosecha" antes de programar el corte del lote.',
+        'Ingresá a "Cosecha & Cadena de Valor" (/harvest) para abrir la Ficha Paso a Paso del Productor: en el Paso 1 el sistema trae automáticamente de la parcela si se cosecha Grano, Fibra, Flores/Biomasa o Doble Propósito.',
+        'En el Paso 2 y Paso 3 de /harvest, fijá la Fecha Final de Cosecha en Campo (Variable 2 del Productor), registrá el acondicionamiento/pesaje y contrastá las Gráficas de Rinde Estimado vs. Rinde Real Obtenido.',
+        'En el Paso 4 y Paso 5 de /harvest, descargá el Acta Oficial de Cosecha (PDF A4), generá los lotes cosechados y emití las Etiquetas QR + GS1 y la Declaración Jurada exigida por ARICCAME (Ley 27.669).'
       ],
       requiredFields: [
         { field: 'Orden de Labor Vinculada (Obligatorio)', rule: 'Bloquea la edición libre de producto para garantizar trazabilidad', example: 'Orden #TASK-104 · Pulverización Preventiva' },
-        { field: 'Ingeniero Agrónomo + Matrícula', rule: 'Respaldo profesional de la receta agronómica', example: 'Ing. Agr. Martín Gómez · MP 8841' },
-        { field: 'Rinde Final de Cosecha (kg/ha)', rule: 'Consolida las métricas bioeconómicas y archiva la campaña', example: '1.450 kg/ha de grano limpio' }
+        { field: 'Variable 2: Fecha Final Productor (/harvest)', rule: 'El productor fija la fecha real de trilla/corte frente al ciclo genético', example: '18/02/2026 · Humedad grano 8.6%' },
+        { field: 'Acta de Cosecha + Etiqueta QR ARICCAME', rule: 'Emite el código de lote cosechado, etiqueta GS1 y DDJJ Ley 27.669', example: 'ACTA-COSECHA-2526 · Lote COS-GRANO-26' }
       ],
       blockingErrorsToAvoid: [
-        'Intentar escribir manualmente el nombre de un producto químico no catalogado: el sistema exige seleccionar la Orden de Labor que contiene el insumo homologado.',
+        'Intentar dar de alta Grano Cosechado o Fibra en "Semillas & Logística INASE" (/seed-batches): esa sección es exclusiva para Semillas Fiscalizadas de Siembra administradas por Central.',
         'Cosechar un lote antes de que se cumplan los Días de Carencia estipulados en el Cuaderno Fitosanitario.'
       ]
     }
